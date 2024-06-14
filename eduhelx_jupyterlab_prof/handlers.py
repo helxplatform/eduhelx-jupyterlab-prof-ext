@@ -419,6 +419,7 @@ async def set_git_authentication(context: AppContext) -> None:
                 f"    helper = { context.config.CREDENTIAL_HELPER }\n"
             )
             credential_config = (
+                "[core]\n"
                 f"{ ssh_credential_config }"
                 "[user]\n"
                 f"    name = { context.config.USER_NAME }\n"
@@ -429,7 +430,8 @@ async def set_git_authentication(context: AppContext) -> None:
                 "[committer]\n"
                 f"    name = { context.config.USER_NAME }\n"
                 f"    email = { instructor['email'] }\n"
-                f"{ password_credential_config }" if use_password_auth else ""
+                f"[credential]\n"
+                f"{ password_credential_config }"
             )
             f.write(credential_config)
     
