@@ -26,7 +26,6 @@ export const AssignmentContent = () => {
                         <AssignmentInfo />
                         <AssignmentSubmissionInfo />
                         <AssignmentStagedChanges style={{ marginTop: 16 }} />
-                        <div style={{ flexGrow: 1}} />
                         <AssignmentSubmitForm />
                     </div>
                 )

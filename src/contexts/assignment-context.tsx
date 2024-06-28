@@ -1,9 +1,13 @@
-import React, { createContext, useContext, ReactNode, useState, useMemo, useEffect } from 'react'
+import React, { createContext, useContext, ReactNode, useState, useMemo, useEffect, useCallback } from 'react'
 import { IChangedArgs } from '@jupyterlab/coreutils'
 import { FileBrowserModel, IDefaultFileBrowser } from '@jupyterlab/filebrowser'
 import { useSnackbar } from './snackbar-context'
 import { IEduhelxSubmissionModel } from '../tokens'
-import { IAssignment, IInstructor, ICurrentAssignment, ICourse, getAssignments, GetAssignmentsResponse, GetInstructorAndStudentsAndCourseResponse, IStudent, getInstructorAndStudentsAndCourse } from '../api'
+import { IAssignment, IInstructor, ICurrentAssignment, ICourse, getAssignments, GetAssignmentsResponse, GetInstructorAndStudentsAndCourseResponse, IStudent, getInstructorAndStudentsAndCourse, listNotebookFiles } from '../api'
+
+interface GradedNotebookExists {
+    (assignment: IAssignment, directoryPath?: string | undefined): boolean
+}
 
 interface IAssignmentContext {
     assignments: IAssignment[] | null | undefined
@@ -11,8 +15,10 @@ interface IAssignmentContext {
     instructor: IInstructor | undefined
     students: IStudent[] | undefined
     course: ICourse | undefined
+    notebookFiles: { [assignmentId: string]: string[] } | undefined
     path: string | null
     loading: boolean
+    gradedNotebookExists: GradedNotebookExists
 }
 
 interface IAssignmentProviderProps {
@@ -30,14 +36,22 @@ export const AssignmentProvider = ({ fileBrowser, children }: IAssignmentProvide
     const [instructor, setInstructor] = useState<IInstructor|undefined>(undefined)
     const [students, setStudents] = useState<IStudent[]|undefined>(undefined)
     const [course, setCourse] = useState<ICourse|undefined>(undefined)
+    const [notebookFiles, setNotebookFiles] = useState<{ [key: string]: string[] }|undefined>(undefined)
 
     const loading = useMemo(() => (
         currentAssignment === undefined ||
         assignments === undefined ||
         instructor === undefined ||
         students === undefined ||
-        course === undefined
-    ), [currentAssignment, assignments, instructor, students, course])
+        course === undefined ||
+        notebookFiles === undefined
+    ), [currentAssignment, assignments, instructor, students, course, notebookFiles])
+
+    const gradedNotebookExists = useCallback((assignment: IAssignment, gradedNotebookPath?: string | undefined) => {
+        if (!notebookFiles) return false
+        if (gradedNotebookPath === undefined) gradedNotebookPath = assignment.masterNotebookPath
+        return notebookFiles[assignment.id].some((file) => file === gradedNotebookPath)
+    }, [notebookFiles])
     
     useEffect(() => {
         setCurrentPath(fileBrowser.model.path)
@@ -122,6 +136,37 @@ export const AssignmentProvider = ({ fileBrowser, children }: IAssignmentProvide
         }
     }, [])
 
+    useEffect(() => {
+        setNotebookFiles(undefined)
+
+        const delay = 5000
+        const retryDelay = 1000
+        let cancelled = false
+        let timeoutId: number | undefined = undefined
+        async function timeout() {
+            try {
+                const { notebooks } = await listNotebookFiles()
+                if (!cancelled) {
+                    setNotebookFiles(notebooks)
+                    timeoutId = window.setTimeout(timeout, delay)
+                }
+            } catch (e: any) {
+                // If the request fails, just maintain whatever state we already have
+                console.error(e)
+                snackbar.open({
+                    type: 'warning',
+                    message: 'Failed to pull notebook files for assignments...'
+                })
+                if (!cancelled) timeoutId = window.setTimeout(timeout, retryDelay)
+            }
+        }
+        timeout()
+        return () => {
+            cancelled = true
+            window.clearTimeout(timeoutId)
+        }
+    }, [])
+
     return (
         <AssignmentContext.Provider value={{
             assignment: currentAssignment,
@@ -129,8 +174,10 @@ export const AssignmentProvider = ({ fileBrowser, children }: IAssignmentProvide
             instructor,
             students,
             course,
+            notebookFiles,
             path: currentPath,
-            loading
+            loading,
+            gradedNotebookExists
         }}>
             { children }
         </AssignmentContext.Provider>

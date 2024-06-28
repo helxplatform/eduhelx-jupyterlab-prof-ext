@@ -7,6 +7,7 @@ import { assignmentSubmissionInfoClass } from './style'
 import { tagClass } from '../assignment-info/style'
 import { assignmentSubmitButton } from '../assignment-submit-form/assignment-submit-button/style'
 import { TextDivider } from '../../text-divider'
+import { disabledButtonClass } from '../../style'
 import { useAssignment, useSnackbar } from '../../../contexts'
 import { gradeAssignment, IStudent, ISubmission } from '../../../api'
 
@@ -76,7 +77,7 @@ const SubmissionLegend = ({ graded, submitted, unsubmitted, resubmitted }: Submi
 }
 
 export const AssignmentSubmissionInfo = ({ }: AssignmentSubmissionInfoProps) => {
-    const { assignment, students, path } = useAssignment()!
+    const { assignment, students, path, gradedNotebookExists } = useAssignment()!
     const snackbar = useSnackbar()!
 
     const [gradingActive, setGradingActive] = useState<boolean>(false)
@@ -111,9 +112,12 @@ export const AssignmentSubmissionInfo = ({ }: AssignmentSubmissionInfoProps) => 
         return [graded, submitted, unsubmitted, resubmitted, graded.length + submitted.length + unsubmitted.length]
     }, [assignment?.studentSubmissions, students])
 
-    const gradingDisabled = useMemo<boolean>(() => {
-        return gradingActive || (graded.length === 0 && submitted.length === 0)
-    }, [graded, submitted, gradingActive])
+    const gradingDisabledReason = useMemo<string|undefined>(() => (
+        gradingActive ? "Grading is already in progress" :
+        !gradedNotebookExists(assignment!) ? "Please select a notebook to use for grading" :
+        (graded.length === 0 && submitted.length === 0) ? "There's nothing to grade right now" :
+        undefined
+    ), [gradingActive, graded, submitted, assignment, gradedNotebookExists])
 
     const grade = useCallback(async () => {
         if (path === null) return
@@ -153,17 +157,17 @@ export const AssignmentSubmissionInfo = ({ }: AssignmentSubmissionInfoProps) => 
             />
             <SubmissionLegend graded={ graded } submitted={ submitted } unsubmitted={ unsubmitted } resubmitted={ resubmitted } />
             <Tooltip
-                title={ gradingActive ? `Currently grading, this may take a while...` : gradingDisabled ? `There are no submissions to grade yet` : "" }
+                title={ gradingDisabledReason }
                 placement="bottom"
             >
                 <button
-                    className={ classes(assignmentSubmitButton) }
+                    className={ classes(assignmentSubmitButton, gradingDisabledReason && disabledButtonClass) }
                     style={{
                         marginTop: 16,
                         height: 28,
-                        backgroundColor: gradingDisabled ? 'var(--jp-layout-color3)' : undefined
+                        backgroundColor: gradingDisabledReason ? 'var(--jp-layout-color3)' : undefined
                     }}
-                    disabled={ gradingDisabled }
+                    disabled={ gradingDisabledReason !== undefined }
                     onClick={ !gradingActive ? grade : abort }
                 >
                     { gradingActive ? (

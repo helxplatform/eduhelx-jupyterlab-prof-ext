@@ -3,7 +3,6 @@ import os
 import tempfile
 import shutil
 import tornado
-import time
 import asyncio
 import httpx
 import traceback
@@ -29,25 +28,6 @@ from eduhelx_utils.api import Api, AuthType
 from eduhelx_utils.process import execute
 from .instructor_repo import InstructorClassRepo, NotInstructorClassRepositoryException
 from ._version import __version__
-
-FIXED_REPO_ROOT = "eduhelx/{}-prof" # <class_name>
-ORIGIN_REMOTE_NAME = "origin"
-# Local branch
-MAIN_BRANCH_NAME = "main"
-# We have to do a merge to sync changes. We stage the merge on a separate branch
-# to proactively guard against a merge conflict.
-MERGE_STAGING_BRANCH_NAME = "__temp__/merge_{}-from-{}" # Formatted with the local head and tracking head commit hashes
-ORIGIN_TRACKING_BRANCH = f"{ ORIGIN_REMOTE_NAME }/{ MAIN_BRANCH_NAME }"
-
-def set_datetime_tz(datetime: str):
-    if datetime is None: return None
-    tz = time.timezone if not time.localtime().tm_isdst else time.altzone
-    utc_offset = -tz / 60
-    if utc_offset == 0: return datetime + "Z"
-    utc_offset_sign = "-" if utc_offset < 0 else "+"
-    utc_offset_hr = str(int(abs(utc_offset) // 60)).zfill(2)
-    utc_offset_min = str(int(abs(utc_offset) % 60)).zfill(2)
-    return datetime + f"{ utc_offset_sign }{utc_offset_hr}:{utc_offset_min}"
 
 class AppContext:
     def __init__(self, serverapp):
@@ -75,12 +55,7 @@ class AppContext:
 
     async def get_repo_root(self):
         course = await self.api.get_course()
-        return self._compute_repo_root(course["name"])
-
-    @staticmethod
-    def _compute_repo_root(course_name: str):
-        # NOTE: the relative path for the server is the root path for the UI
-        return Path(FIXED_REPO_ROOT.format(course_name.replace(" ", "_")))
+        return InstructorClassRepo._compute_repo_root(course["name"])
 
 class BaseHandler(APIHandler):
     context: AppContext = None
@@ -112,7 +87,6 @@ class AssignmentsHandler(BaseHandler):
     async def get_value(self, current_path: str):
         current_path_abs = os.path.realpath(current_path)
 
-        student = await self.api.get_my_user()
         assignments = await self.api.get_my_assignments()
         course = await self.api.get_course()
 
@@ -122,7 +96,7 @@ class AssignmentsHandler(BaseHandler):
         }
 
         try:
-            student_repo = InstructorClassRepo(course, assignments, current_path_abs)
+            instructor_repo = InstructorClassRepo(course, assignments, current_path_abs)
         except Exception:
             return json.dumps(value)
 
@@ -134,7 +108,7 @@ class AssignmentsHandler(BaseHandler):
             # so we need to make sure the "absolute" path is actually relative to the Jupyter server
             cwd = os.getcwd()
             rel_assignment_path = os.path.relpath(
-                student_repo.get_assignment_path(assignment),
+                instructor_repo.get_assignment_path(assignment),
                 cwd
             )
             # The cwd is the root in the frontend, so treat the path as such.
@@ -142,9 +116,9 @@ class AssignmentsHandler(BaseHandler):
             assignment["absolute_directory_path"] = os.path.join("/", rel_assignment_path)
 
             assignment["staged_changes"] = []
-            for modified_path in get_modified_paths(path=student_repo.repo_root):
-                full_modified_path = Path(student_repo.repo_root) / modified_path["path"]
-                abs_assn_path = Path(student_repo.repo_root) / assignment["directory_path"]
+            for modified_path in get_modified_paths(path=instructor_repo.repo_root):
+                full_modified_path = instructor_repo.repo_root / modified_path["path"]
+                abs_assn_path = instructor_repo.repo_root / assignment["directory_path"]
                 try:
                     path_relative_to_assn = full_modified_path.relative_to(abs_assn_path)
                     modified_path["path_from_repo"] = modified_path["path"]
@@ -156,7 +130,7 @@ class AssignmentsHandler(BaseHandler):
 
         value["assignments"] = assignments
         
-        current_assignment = student_repo.current_assignment
+        current_assignment = instructor_repo.current_assignment
         if current_assignment:
             current_assignment["student_submissions"] = await self.api.get_submissions(current_assignment["id"])
             for student in current_assignment["student_submissions"]:
@@ -183,8 +157,7 @@ class AssignmentsHandler(BaseHandler):
     async def patch(self):
         name = self.get_argument("name")
         data = self.get_json_body()
-        if "available_date" in data: data["available_date"] = set_datetime_tz(data["available_date"])
-        if "due_date" in data: data["due_date"] = set_datetime_tz(data["due_date"])
+        
         await self.api.update_assignment(name, **data)
 
 class SubmissionHandler(BaseHandler):
@@ -223,6 +196,16 @@ class SubmissionHandler(BaseHandler):
 
         current_assignment_path = instructor_repo.get_assignment_path(instructor_repo.current_assignment)
 
+        try:
+            instructor_repo = InstructorClassRepo(course, assignments, current_assignment_path)
+            instructor_repo.create_student_notebook()
+        except Exception as e:
+            self.set_status(500)
+            self.finish(json.dumps({
+                "message": "Failed to generate student version of assignment notebook: " + str(e)
+            }))
+            return
+
         rollback_id = get_head_commit_id(path=instructor_repo.repo_root)
         stage_files(".", path=current_assignment_path)
         
@@ -240,14 +223,43 @@ class SubmissionHandler(BaseHandler):
             return
         
         try:
-            push(ORIGIN_REMOTE_NAME, MAIN_BRANCH_NAME, path=current_assignment_path)
+            push(InstructorClassRepo.ORIGIN_REMOTE_NAME, InstructorClassRepo.MAIN_BRANCH_NAME, path=current_assignment_path)
             self.finish()
         except Exception as e:
             # If the push fails, but we've already committed,
             # rollback the commit and abort.
             git_reset(rollback_id, path=instructor_repo.repo_root)
-            self.set_status(500)
-            self.finish(str(e))
+
+            remote_echos = [line.partition("remote:")[2].strip() for line in str(e).splitlines() if line.strip().startswith("remote:")]
+            if len(remote_echos) > 0:
+                # Rejected by a Git hook
+                self.set_status(409)
+                self.finish(json.dumps(remote_echos))
+            else:
+                self.set_status(500)
+                self.finish(str(e))
+
+""" This is used for selecting the graded notebook. """
+class NotebookFilesHandler(BaseHandler):
+    @tornado.web.authenticated
+    async def get(self):
+        course = await self.api.get_course()
+        assignments = await self.api.get_my_assignments()
+
+        assignment_notebooks = {}
+        for assignment in assignments:
+            repo_root = InstructorClassRepo._compute_repo_root(course["name"]).resolve()
+            assignment_path = repo_root / assignment["directory_path"]
+
+            notebooks = [path.relative_to(assignment_path) for path in assignment_path.rglob("*.ipynb")]
+            # Sort by nestedness, then alphabetically
+            notebooks.sort(key=lambda path: (len(path.parents), str(path)))
+
+            assignment_notebooks[assignment["id"]] = [str(path) for path in notebooks]
+
+        self.finish(json.dumps({
+            "notebooks": assignment_notebooks
+        }))
 
 class SyncToLMSHandler(BaseHandler):
     @tornado.web.authenticated
@@ -278,7 +290,7 @@ class GradeAssignmentHandler(BaseHandler):
             return
         
         try:
-            with open(os.path.join(repo.get_assignment_path(repo.current_assignment), "grades.csv"), "r") as f:
+            with open(repo.get_assignment_path(repo.current_assignment) / "grades.csv", "r") as f:
                 self.api.grade_assignment(repo.current_assignment["id"], f.read())
         except FileNotFoundError:
             self.set_status(404)
@@ -336,7 +348,7 @@ async def create_repo_root_if_not_exists(context: AppContext) -> None:
 async def create_ssh_config_if_not_exists(context: AppContext) -> None:
     course = await context.api.get_course()
     settings = await context.api.get_settings()
-    repo_root = context._compute_repo_root(course["name"]).resolve()
+    repo_root = InstructorClassRepo._compute_repo_root(course["name"]).resolve()
     ssh_config_dir = repo_root / ".ssh"
     ssh_config_file = ssh_config_dir / "config"
     ssh_identity_file = ssh_config_dir / "id_gitea"
@@ -378,7 +390,7 @@ async def create_ssh_config_if_not_exists(context: AppContext) -> None:
 
 async def clone_repo_if_not_exists(context: AppContext) -> None:
     course = await context.api.get_course()
-    repo_root = context._compute_repo_root(course["name"])
+    repo_root = InstructorClassRepo._compute_repo_root(course["name"])
     try:
         get_git_repo_root(path=repo_root)
     except InvalidGitRepositoryException:
@@ -388,20 +400,23 @@ async def clone_repo_if_not_exists(context: AppContext) -> None:
         master_repository_url = course["master_remote_url"]
         init_repository(repo_root)
         await set_git_authentication(context)
-        add_remote(ORIGIN_REMOTE_NAME, master_repository_url, path=repo_root)
-        fetch_repository(ORIGIN_REMOTE_NAME, path=repo_root)
-        checkout(f"{ MAIN_BRANCH_NAME }", path=repo_root)
+        add_remote(InstructorClassRepo.ORIGIN_REMOTE_NAME, master_repository_url, path=repo_root)
+        fetch_repository(InstructorClassRepo.ORIGIN_REMOTE_NAME, path=repo_root)
+        checkout(f"{ InstructorClassRepo.MAIN_BRANCH_NAME }", path=repo_root)
         
         
 
 async def set_git_authentication(context: AppContext) -> None:
     course = await context.api.get_course()
     instructor = await context.api.get_my_user()
-    repo_root = context._compute_repo_root(course["name"]).resolve()
+    repo_root = InstructorClassRepo._compute_repo_root(course["name"]).resolve()
     master_repository_url = course["master_remote_url"]
     ssh_config_file = repo_root / ".ssh" / "config"
     ssh_identity_file = repo_root / ".ssh" / "id_gitea"
-    use_password_auth = context.api.auth_type == AuthType.PASSWORD
+
+    parsed_remote = urlparse(master_repository_url)
+    protocol, host = parsed_remote.scheme, parsed_remote.netloc
+    use_password_auth = protocol == "http" or protocol == "https"
 
     try:
         get_git_repo_root(path=repo_root)
@@ -447,6 +462,14 @@ async def set_git_authentication(context: AppContext) -> None:
                 f"{ password_credential_config }" if use_password_auth else ""
             )
             f.write(credential_config)
+    
+    if use_password_auth:
+        credentials = \
+            f"protocol={ protocol }\n" \
+            f"host={ host }\n" \
+            f"username={ context.config.USER_NAME }\n" \
+            f"password={ context.config.USER_AUTOGEN_PASSWORD }"
+        execute(["git", "credential", "approve"], stdin_input=credentials, cwd=repo_root)
             
 async def set_root_folder_permissions(context: AppContext) -> None:
     # repo_root = await context.get_repo_root()
@@ -457,17 +480,17 @@ async def set_root_folder_permissions(context: AppContext) -> None:
 
 async def sync_upstream_repository(context: AppContext) -> None:
     course = await context.api.get_course()
-    repo_root = context._compute_repo_root(course["name"])
+    repo_root = InstructorClassRepo._compute_repo_root(course["name"])
 
     try:
-        fetch_repository(ORIGIN_REMOTE_NAME, path=repo_root)
+        fetch_repository(InstructorClassRepo.ORIGIN_REMOTE_NAME, path=repo_root)
     except:
         print("Fatal: Couldn't fetch remote tracking branch, aborting sync...")
 
-    checkout(MAIN_BRANCH_NAME, path=repo_root)
+    checkout(InstructorClassRepo.MAIN_BRANCH_NAME, path=repo_root)
     local_head = get_head_commit_id(path=repo_root)
-    tracking_head = get_head_commit_id(ORIGIN_TRACKING_BRANCH, path=repo_root)
-    merge_branch_name = MERGE_STAGING_BRANCH_NAME.format(local_head[:8], tracking_head[:8])
+    tracking_head = get_head_commit_id(InstructorClassRepo.ORIGIN_TRACKING_BRANCH, path=repo_root)
+    merge_branch_name = InstructorClassRepo.MERGE_STAGING_BRANCH_NAME.format(local_head[:8], tracking_head[:8])
     if is_ancestor_commit(descendant=local_head, ancestor=tracking_head, path=repo_root):
         # If the local head is a descendant of the local head,
         # then any upstream changes have already been merged in.
@@ -482,9 +505,9 @@ async def sync_upstream_repository(context: AppContext) -> None:
 
     # Merge the upstream tracking branch into the temp merge branch
     try:
-        print(f"Merging { ORIGIN_TRACKING_BRANCH } ({ tracking_head[:8] }) --> { MAIN_BRANCH_NAME } ({ local_head[:8] }) on branch { merge_branch_name }")
+        print(f"Merging { InstructorClassRepo.ORIGIN_TRACKING_BRANCH } ({ tracking_head[:8] }) --> { InstructorClassRepo.MAIN_BRANCH_NAME } ({ local_head[:8] }) on branch { merge_branch_name }")
         # Merge the upstream tracking branch into the merge branch
-        conflicts = git_merge(ORIGIN_TRACKING_BRANCH, commit=True, path=repo_root)
+        conflicts = git_merge(InstructorClassRepo.ORIGIN_TRACKING_BRANCH, commit=True, path=repo_root)
         if len(conflicts) > 0:
             raise Exception("Encountered merge conflicts during merge: ", ", ".join(conflicts))
 
@@ -492,15 +515,15 @@ async def sync_upstream_repository(context: AppContext) -> None:
         print("Fatal: Can't merge remote changes into student repository", e)
         # Cleanup the merge branch and return to main
         abort_merge(path=repo_root)
-        checkout(MAIN_BRANCH_NAME, path=repo_root)
+        checkout(InstructorClassRepo.MAIN_BRANCH_NAME, path=repo_root)
         delete_local_branch(merge_branch_name, force=True, path=repo_root)
         return
 
-    checkout(MAIN_BRANCH_NAME, path=repo_root)
+    checkout(InstructorClassRepo.MAIN_BRANCH_NAME, path=repo_root)
 
     # If we successfully merged it, we can go ahead and merge the temp branch into our actual branch
     try:
-        print(f"Merging { merge_branch_name } --> { MAIN_BRANCH_NAME }")
+        print(f"Merging { merge_branch_name } --> { InstructorClassRepo.MAIN_BRANCH_NAME }")
         # Merge the merge staging branch into the actual branch, don't need to commit since fast forward
         # We don't need to check for conflicts here since the actual branch can now be fast forwarded.
         git_merge(merge_branch_name, ff_only=True, commit=False, path=repo_root)
@@ -543,6 +566,7 @@ def setup_handlers(server_app):
     handlers = [
         ("assignments", AssignmentsHandler),
         ("course_instructor_students", CourseAndInstructorAndStudentsHandler),
+        ("notebook_files", NotebookFilesHandler),
         ("submit_assignment", SubmissionHandler),
         ("sync_to_lms", SyncToLMSHandler),
         ("grade_assignment", GradeAssignmentHandler),

@@ -5,7 +5,10 @@ export const assignmentStagedChangesClass = style({
     color: 'var(--jp-ui-font-color0)',
     display: 'flex',
     flexDirection: 'column',
-    padding: '0 12px'
+    padding: '0 12px',
+    flexGrow: 1,
+    height: 0,
+    overflow: 'auto'
 })
 
 export const stagedChangesListClass = style({

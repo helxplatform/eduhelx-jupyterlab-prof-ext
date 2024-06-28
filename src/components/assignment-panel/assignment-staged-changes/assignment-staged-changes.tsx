@@ -113,7 +113,6 @@ export const AssignmentStagedChanges = ({ ...props }: AssignmentStagedChangesPro
                                 <fileIcon.react tag="span" />
                             ) }
                             <span style={{ marginLeft: 8 }}>
-                                { !change.pathFromAssignmentRoot.startsWith("/") ? "/" : "" }
                                 { change.pathFromAssignmentRoot }
                                 { change.type === "directory" && !change.pathFromAssignmentRoot.endsWith("/") ? "/*" : "" }
                             </span>

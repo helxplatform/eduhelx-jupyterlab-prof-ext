@@ -26,7 +26,8 @@ dependencies = [
     "requests>=2.0.1,<3",
     "httpx>=0,<1",
     "PyJWT>=2.0.0,<3",
-    "eduhelx_utils@git+https://github.com/helxplatform/eduhelx-utils"
+    "eduhelx_utils@git+https://github.com/helxplatform/eduhelx-utils",
+    "otter-grader==5.5.0"
 ]
 dynamic = ["version", "description", "authors", "urls", "keywords"]
 

@@ -37,7 +37,7 @@ export function getLocalTimezoneOffset(): number {
     return new Date().getTimezoneOffset()
 }
 
-export function getLocalTimezoneOffsetText(returnZ=false): string {
+export function getLocalTimezoneOffsetText(returnZ=true): string {
     const offset = -getLocalTimezoneOffset()
     if (returnZ && offset === 0) return "Z"
 
@@ -53,6 +53,10 @@ export function getLocalTimezoneFullname(): string {
 
 export function getLocalTimezoneAbbr(): string {
     return new Date().toLocaleTimeString(undefined, { timeZoneName: 'short' }).split(" ")[2]
+}
+
+export function addLocalTimezone(datetimeWithoutTz: string, returnZ=true): string {
+    return datetimeWithoutTz + getLocalTimezoneOffsetText(returnZ)
 }
 
 // The purpose of this is to standardize the date string formats used across the project.

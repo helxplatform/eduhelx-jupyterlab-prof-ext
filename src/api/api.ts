@@ -17,10 +17,11 @@ import {
 import { IInstructor, Instructor } from './instructor'
 
 export interface UpdateAssignmentData {
-    new_name?: string | null,
-    directory_path?: string | null,
+    new_name?: string,
+    directory_path?: string,
+    master_notebook_path?: string,
     available_date?: string | null,
-    due_date?: string | null
+    due_date?: string | null,
 }
 
 export interface GetAssignmentsResponse {
@@ -32,6 +33,17 @@ export interface GetInstructorAndStudentsAndCourseResponse {
     instructor: IInstructor
     students: IStudent[]
     course: ICourse
+}
+
+export interface NotebookFilesResponse {
+    notebooks: { [assignmentId: string]: string[] }
+}
+
+export async function listNotebookFiles(): Promise<NotebookFilesResponse> {
+    const data = await requestAPI<NotebookFilesResponse>(`/notebook_files`, {
+        method: 'GET'
+    })
+    return data
 }
 
 export async function getInstructorAndStudentsAndCourse(): Promise<GetInstructorAndStudentsAndCourseResponse> {

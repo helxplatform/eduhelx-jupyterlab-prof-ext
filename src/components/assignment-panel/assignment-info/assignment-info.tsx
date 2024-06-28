@@ -1,15 +1,14 @@
 import React, { ChangeEvent, Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Tooltip } from 'antd'
 import moment from 'moment'
-import TextField from '@material-ui/core/TextField'
+import { TextField, MenuItem, Select, FormHelperText } from '@material-ui/core'
 import { ArrowBackSharp } from '@material-ui/icons'
 import { useDebouncedCallback } from 'use-debounce'
 import { assignmentInfoClass, assignmentInfoSectionClass, assignmentInfoSectionHeaderClass, assignmentInfoSectionWarningClass, assignmentNameClass, tagClass } from './style'
-import { useAssignment } from '../../../contexts'
-import { getLocalTimezoneAbbr } from '../../../utils'
+import { InfoTooltip } from '../../info-tooltip'
+import { useAssignment, useCommands } from '../../../contexts'
+import { addLocalTimezone, getLocalTimezoneAbbr } from '../../../utils'
 import { updateAssignment } from '../../../api'
-import { ExpectedValue } from '../../expected-value'
-import { InputAdornment } from '@material-ui/core'
 
 const MS_IN_HOURS = 3.6e6
 
@@ -27,12 +26,14 @@ const formatMuiToDate = (date: string): Date | null => {
 }
 
 export const AssignmentInfo = ({  }: AssignmentInfoProps) => {
-    const { assignment, instructor, course } = useAssignment()!
+    const { assignment, instructor, course, notebookFiles, gradedNotebookExists } = useAssignment()!
+    const commands = useCommands()
     // We need the raw undebounced value so that other parts of the UI can respond immediately to the expected value
     const [availableDateControlled, setAvailableDateControlled] = useState<string|undefined>(undefined)
     const [dueDateControlled, setDueDateControlled] = useState<string|undefined>(undefined)
+    const [gradedNotebookControlled, setGradedNotebookControlled] = useState<string|undefined>(assignment?.masterNotebookPath)
 
-    if (!instructor || !assignment || !course) return null
+    if (!instructor || !assignment || !course || !notebookFiles) return null
 
     const hoursUntilDue = useMemo(() => (
         assignment.isCreated ? (
@@ -125,9 +126,13 @@ export const AssignmentInfo = ({  }: AssignmentInfoProps) => {
         )
     }, [course, assignment, hoursUntilDue])
 
+    const gradedNotebookInvalid = useMemo(() => (
+        !gradedNotebookExists(assignment, gradedNotebookControlled)
+    ), [gradedNotebookExists, assignment, gradedNotebookControlled])
+
     const onAvailableDateChanged = useDebouncedCallback((e: ChangeEvent<HTMLInputElement>) => {
         void async function() {
-            const newDate = e.target.value !== "" ? e.target.value : null
+            const newDate = e.target.value !== "" ? addLocalTimezone(e.target.value) : null
             await updateAssignment(assignment.name, {
                 available_date: newDate
             })
@@ -136,12 +141,26 @@ export const AssignmentInfo = ({  }: AssignmentInfoProps) => {
 
     const onDueDateChanged = useDebouncedCallback((e: ChangeEvent<HTMLInputElement>) => {
         void async function() {
-            const newDate = e.target.value !== "" ? e.target.value : null
+            const newDate = e.target.value !== "" ? addLocalTimezone(e.target.value) : null
             await updateAssignment(assignment.name, {
                 due_date: newDate
             })
         }()
     }, 1000, { leading: true })
+
+    const onGradedNotebookChanged = useDebouncedCallback((e: ChangeEvent<HTMLInputElement>) => {
+        void async function() {
+            await updateAssignment(assignment.name, {
+                master_notebook_path: e.target.value
+            })
+        }()
+    }, 1000, { leading: true })
+
+    const openGradedNotebook = useCallback(() => {
+        if (!commands || !assignment) return
+        const gradedNotebookPath = assignment.absoluteDirectoryPath + "/" + gradedNotebookControlled
+        commands.execute('docmanager:open', { path: gradedNotebookPath })
+    }, [commands, assignment, gradedNotebookControlled])
 
     useEffect(() => {
         setAvailableDateControlled(formatDateToMui(assignment.availableDate))
@@ -212,6 +231,60 @@ export const AssignmentInfo = ({  }: AssignmentInfoProps) => {
                     />
                 </div>
             </div>
+            <div className={ assignmentInfoSectionClass } style={{ marginTop: 0 }}>
+                <h5 className={ assignmentInfoSectionHeaderClass }>
+                    Master notebook
+                    { gradedNotebookInvalid && ` (invalid)` }
+                    <InfoTooltip
+                        title="This notebook contains Otter Grader test cases"
+                        trigger="hover"
+                        iconProps={{ style: { fontSize: 13, marginLeft: 4 } }}
+                    />
+                </h5>
+                <div style={{ width: "100%" }}>
+                    <Select
+                        error={ gradedNotebookInvalid }
+                        defaultValue={ assignment.masterNotebookPath }
+                        onChange={ (e: ChangeEvent<any>) => {
+                            setGradedNotebookControlled(e.target.value)
+                            onGradedNotebookChanged(e)
+                        } }
+                        style={{ width: "100%" }}
+                    >
+                        {
+                            notebookFiles[assignment.id].map((notebook) => (
+                                <MenuItem key={ notebook } value={ notebook }>{ notebook }</MenuItem>
+                            ))
+                        }
+                    </Select>
+                    { !gradedNotebookInvalid && (
+                        <FormHelperText style={{ color: "#1976d2" }}>
+                            <a onClick={ openGradedNotebook } style={{ cursor: "pointer" }}>
+                                Open notebook
+                            </a>
+                        </FormHelperText>
+                    )}
+                </div>
+            </div>
+            {/* <div className={ assignmentInfoSectionClass } style={{ marginTop: 0 }}>
+                <h5 className={ assignmentInfoSectionHeaderClass }>
+                    Student notebook
+                    <InfoTooltip
+                        title="This is the student copy of the notebook with hidden test cases"
+                        trigger="hover"
+                        iconProps={{ style: { fontSize: 13, marginLeft: 4 } }}
+                    />
+                </h5>
+                <div style={{ width: "100%" }}>
+                    <Select
+                        readOnly
+                        value={ assignment.studentNotebookPath }
+                        style={{ width: "100%" }}
+                    >
+                        <MenuItem value={ assignment.studentNotebookPath }>{ assignment.studentNotebookPath }</MenuItem>
+                    </Select>
+                </div>
+            </div> */}
         </div>
     )
 }

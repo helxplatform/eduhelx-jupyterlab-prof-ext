@@ -2,7 +2,9 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Tooltip } from 'antd'
 import { Backdrop, CircularProgress, Input, Snackbar } from '@material-ui/core'
 import { Alert } from '@material-ui/lab'
+import { Dialog, showErrorMessage } from '@jupyterlab/apputils'
 import { AssignmentSubmitButton } from './assignment-submit-button'
+import { PushPolicyViolationMessage } from './push-policy-violation-message'
 import {
     submitFormContainerClass, submitRootClass,
     summaryClass,
@@ -16,21 +18,26 @@ interface AssignmentSubmitFormProps {
 }
 
 export const AssignmentSubmitForm = ({ }: AssignmentSubmitFormProps) => {
-    const { assignment, course, path } = useAssignment()!
+    const { assignment, course, path, gradedNotebookExists } = useAssignment()!
     const backdrop = useBackdrop()!
     const snackbar = useSnackbar()!
 
     const [summaryText, setSummaryText] = useState<string>("")
     const [submitting, setSubmitting] = useState<boolean>(false)
 
-    const disabled = submitting || summaryText === ""
+    const disabled = !assignment || submitting || summaryText === "" || !gradedNotebookExists(assignment)
     const disabledReason = disabled ? (
-        !assignment ? undefined :   
+        !assignment ? undefined :
         submitting ? `Currently uploading assignment` :
+        !gradedNotebookExists(assignment) ? "Please select a notebook to use for grading" :
         summaryText === "" ? `Please enter a summary describing your changes` : undefined
     ) : undefined
     
     const submitAssignment = async () => {
+        if (!assignment) {
+            console.log("Unknown assignment, can't submit")
+            return
+        }
         if (!path) {
             // If this component is being rendered, this should never be possible.
             console.log("Unknown cwd, can't submit")
@@ -47,9 +54,22 @@ export const AssignmentSubmitForm = ({ }: AssignmentSubmitFormProps) => {
                 message: 'Successfully uploaded assignment!'
             })
         } catch (e: any) {
-            snackbar.open({
+            if (e.response?.status === 409) {
+                showErrorMessage(
+                    'Push policy violation',
+                    {
+                        message: (
+                            <PushPolicyViolationMessage
+                                remoteMessages={ await e.response.json() }
+                                assignmentPath={ assignment!.directoryPath }
+                            />
+                        )
+                    },
+                    [Dialog.warnButton({ label: 'Dismiss' })]
+                )
+            } else snackbar.open({
                 type: 'error',
-                message: 'Failed to upload assignment!'
+                message: 'Failed to upload changes!'
             })
         }
         setSubmitting(false)
