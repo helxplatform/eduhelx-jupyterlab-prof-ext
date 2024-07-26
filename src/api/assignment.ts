@@ -10,6 +10,7 @@ interface StudentSubmissions {
 export interface IAssignment {
     readonly id: number
     readonly name: string
+    readonly publishedToStaging: boolean
     readonly directoryPath: string
     // Added by serverextension so that we know what path to give the filebrowser
     // to open an assignment, even though we don't know where the repo root is.
@@ -43,6 +44,7 @@ export class Assignment implements IAssignment {
     constructor(
         private _id: number,
         private _name: string,
+        private _publishedToStaging: boolean,
         private _directoryPath: string,
         private _absoluteDirectoryPath: string,
         private _masterNotebookPath: string,
@@ -65,6 +67,7 @@ export class Assignment implements IAssignment {
     
     get id() { return this._id }
     get name() { return this._name }
+    get publishedToStaging() { return this._publishedToStaging }
     get directoryPath() { return this._directoryPath }
     get absoluteDirectoryPath() { return this._absoluteDirectoryPath }
     get masterNotebookPath() { return this._masterNotebookPath }
@@ -91,6 +94,7 @@ export class Assignment implements IAssignment {
         return new Assignment(
             data.id,
             data.name,
+            data.published_to_staging,
             data.directory_path,
             data.absolute_directory_path,
             data.master_notebook_path,

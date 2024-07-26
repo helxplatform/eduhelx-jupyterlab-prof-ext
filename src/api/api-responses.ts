@@ -50,6 +50,7 @@ export interface SubmissionResponse {
 export interface AssignmentResponse {
     id: number
     name: string
+    published_to_staging: boolean
     directory_path: string
     absolute_directory_path: string
     master_notebook_path: string

@@ -91,7 +91,7 @@ export const AssignmentStagedChanges = ({ ...props }: AssignmentStagedChangesPro
                     No Changes
                 </h3>
                 <p style={{ fontSize: 13, marginTop: 0 }}>
-                    Files you've changed since your last submission will appear here.
+                    Files you've changed since your last push will appear here.
                 </p>
             </div>
         </div>
