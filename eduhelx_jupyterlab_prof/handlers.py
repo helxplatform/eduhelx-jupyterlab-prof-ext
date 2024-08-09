@@ -473,34 +473,36 @@ async def set_root_folder_permissions(context: AppContext) -> None:
     ...
 
 async def sync_upstream_repository(context: AppContext, course) -> None:
-    assignments = await context.api.get_my_assignments()
-    repo_root = InstructorClassRepo._compute_repo_root(course["name"])
 
-    try:
-        fetch_repository(InstructorClassRepo.ORIGIN_REMOTE_NAME, path=repo_root)
-    except:
-        print("Fatal: Couldn't fetch remote tracking branch, aborting sync...")
-        return
+    def gather_overwritable_paths():
+        nonlocal overwritable_paths
+        for assignment in assignments:
+            for glob_pattern in assignment["overwritable_files"]:
+                overwritable_paths.update((repo_root / assignment["directory_path"]).glob(glob_pattern))
 
-    checkout(InstructorClassRepo.MAIN_BRANCH_NAME, path=repo_root)
-    local_head = get_head_commit_id(path=repo_root)
-    tracking_head = get_head_commit_id(InstructorClassRepo.ORIGIN_TRACKING_BRANCH, path=repo_root)
-    merge_branch_name = InstructorClassRepo.MERGE_STAGING_BRANCH_NAME.format(local_head[:8], tracking_head[:8])
-    if is_ancestor_commit(descendant=local_head, ancestor=tracking_head, path=repo_root):
-        # If the local head is a descendant of the local head,
-        # then any upstream changes have already been merged in.
-        print(f"Tracking and local heads are the merged, nothing to sync...")
-        return
-    
-    # Make certain the merge branch is empty before we start.
-    try: delete_local_branch(merge_branch_name, force=True, path=repo_root)
-    except: pass
-    # Branch onto the merge branch off the user's head
-    checkout(merge_branch_name, new_branch=True, path=repo_root)
+    def rename_merge_conflicts(merge_conflicts):
+        conflict_types = {
+            conflict["path"] : conflict["modification_type"] for conflict in get_modified_paths(path=repo_root)
+            if conflict["path"] in merge_conflicts
+        }
+        for conflict in merge_conflicts:
+            if repo_root / conflict not in overwritable_paths:
+                # If the file isn't overwritable, make a backup of it (as long as it's not deleted locally).
+                print("Encountered non-overwriteable merge conflict", conflict, ". Creating backup...")
+                backup_file(conflict)
+            else:
+                print(f"Detected overwritable merge conflict: '{ conflict }'")
+            
+            # Overwrite the file with its incoming version -- resolve the conflict.
+            if conflict_types[conflict][1] != "D":
+                git_restore(conflict, source="MERGE_HEAD", staged=True, worktree=True, path=repo_root)
+            else:
+                # If the conflict was deleted on the merge head, git restore won't be able to restore it.
+                # Instead, just update the index/worktree to also delete the file.
+                git_rm(conflict, cached=False, path=repo_root)
 
-    isonow = datetime.now().isoformat()
-    file_contents = { path: path.read_bytes() for path in repo_root.rglob("*") if path.is_file() and ".git" not in path.parts }
     def backup_file(conflict_path: Path):
+        nonlocal file_contents
         print("BACKING UP FILE", conflict_path)
         full_conflict_path = repo_root / conflict_path
         if full_conflict_path in file_contents:
@@ -511,13 +513,8 @@ async def sync_upstream_repository(context: AppContext, course) -> None:
         else:
             print(str(conflict_path), "deleted locally, cannot create a backup.")
 
-    # These are relative to the repo root.
-    untracked_files = {
-        f["path"] for f in get_modified_paths(untracked=True, path=repo_root)
-        if f["modification_type"] == "??"
-    }
-    untracked_files_dir = repo_root / f".untracked-{ isonow }"
     def move_untracked_files():
+        nonlocal untracked_files, repo_root
         for file in untracked_files:
             untracked_path = untracked_files_dir / file
             untracked_path.parent.mkdir(parents=True, exist_ok=True)
@@ -540,37 +537,48 @@ async def sync_upstream_repository(context: AppContext, course) -> None:
                 print(f"Couldn't restore untracked file '{ original_file }' as it already exists on HEAD, backing up instead...")
                 backup_file(original_file)
 
+    assignments = await context.api.get_my_assignments()
+    repo_root = InstructorClassRepo._compute_repo_root(course["name"])
+
+    try:
+        fetch_repository(InstructorClassRepo.ORIGIN_REMOTE_NAME, path=repo_root)
+    except:
+        print("Fatal: Couldn't fetch remote tracking branch, aborting sync...")
+        return
+    
+    checkout(InstructorClassRepo.MAIN_BRANCH_NAME, path=repo_root)
+    local_head = get_head_commit_id(path=repo_root)
+    tracking_head = get_head_commit_id(InstructorClassRepo.ORIGIN_TRACKING_BRANCH, path=repo_root)
+    merge_branch_name = InstructorClassRepo.MERGE_STAGING_BRANCH_NAME.format(local_head[:8], tracking_head[:8])
+    if is_ancestor_commit(descendant=local_head, ancestor=tracking_head, path=repo_root):
+        # If the local head is a descendant of the tracking head,
+        # then any upstream changes have already been merged in.
+        print(f"Tracking and local heads are merged, nothing to sync...")
+        return
+    
+    # Make certain the merge branch is empty before we start.
+    try: delete_local_branch(merge_branch_name, force=True, path=repo_root)
+    except: pass
+    # Branch onto the merge branch off the user's head
+    checkout(merge_branch_name, new_branch=True, path=repo_root)
+
+    isonow = datetime.now().isoformat()
+
+    # Everything in the repo root that isn't the .git folder
+    file_contents = { path: path.read_bytes() for path in repo_root.rglob("*") if path.is_file() and ".git" not in path.parts }
+    # These are relative to the repo root.
+    untracked_files = {
+        f["path"] for f in get_modified_paths(untracked=True, path=repo_root)
+        if f["modification_type"] == "??"
+    }
+    untracked_files_dir = repo_root / f".untracked-{ isonow }"
+
     # Grab every overwritable path inside the repository.
-    # Note: we need to do again after the merge, since we can only pick up paths that exist on disk.
+    # Note: we need to do this again after the merge, since we can only pick up paths that exist on disk.
     # If the local head deleted a file, it won't be picked up in the first pass.
     # Vice-versa, if the merge head deleted a file, it won't be picked up in the second pass.
     overwritable_paths = set()
-    def gather_overwritable_paths():
-        for assignment in assignments:
-            for glob_pattern in assignment["overwritable_files"]:
-                overwritable_paths.update((repo_root / assignment["directory_path"]).glob(glob_pattern))
     gather_overwritable_paths() # pick up paths introduced by the local head
-
-    def rename_merge_conflicts(merge_conflicts):
-        conflict_types = {
-            conflict["path"] : conflict["modification_type"] for conflict in get_modified_paths(path=repo_root)
-            if conflict["path"] in merge_conflicts
-        }
-        for conflict in merge_conflicts:
-            if repo_root / conflict not in overwritable_paths:
-                # If the file isn't overwritable, make a backup of it (as long as it's not deleted locally).
-                print("Encountered non-overwriteable merge conflict", conflict, ". Creating backup...")
-                backup_file(conflict)
-            else:
-                print(f"Detected overwritable merge conflict: '{ conflict }'")
-            
-            # Overwrite the file with its incoming version -- resolve the conflict.
-            if conflict_types[conflict][1] != "D":
-                git_restore(conflict, source="MERGE_HEAD", staged=True, worktree=True, path=repo_root)
-            else:
-                # If the conflict was deleted on the merge head, git restore won't be able to restore it.
-                # Instead, just update the index/worktree to also delete the file.
-                git_rm(conflict, cached=False, path=repo_root)
 
     # Merge the upstream tracking branch into the temp merge branch
     try:
