@@ -368,7 +368,10 @@ async def create_ssh_config_if_not_exists(context: AppContext, course) -> None:
     
     if not ssh_identity_file.exists():
         ssh_config_dir.mkdir(parents=True, exist_ok=True)
+        execute(["chmod", "700", ssh_config_dir])
         execute(["ssh-keygen", "-t", "rsa", "-f", ssh_identity_file, "-N", ""])
+        execute(["chmod", "444", ssh_public_key_file])
+        execute(["chmod", "600", ssh_identity_file])
     with open(ssh_config_file, "w+") as f:
         # Host (public Gitea URL) is rewritten as an alias to HostName (private ssh URL)
         f.write( 
@@ -385,7 +388,7 @@ async def create_ssh_config_if_not_exists(context: AppContext, course) -> None:
         public_key = f.read()
         await context.api.set_ssh_key("jlp-client", public_key)
 
-async def clone_repo_if_not_exists(context: AppContext, course) -> None:
+async def clone_repo_if_not_exists(context: AppContext, course, instructor) -> None:
     repo_root = InstructorClassRepo._compute_repo_root(course["name"])
     try:
         get_git_repo_root(path=repo_root)
@@ -395,7 +398,7 @@ async def clone_repo_if_not_exists(context: AppContext, course) -> None:
         """
         master_repository_url = course["master_remote_url"]
         init_repository(repo_root)
-        await set_git_authentication(context)
+        await set_git_authentication(context, course, instructor)
         add_remote(InstructorClassRepo.ORIGIN_REMOTE_NAME, master_repository_url, path=repo_root)
         fetch_repository(InstructorClassRepo.ORIGIN_REMOTE_NAME, path=repo_root)
         checkout(f"{ InstructorClassRepo.MAIN_BRANCH_NAME }", path=repo_root)
@@ -588,7 +591,7 @@ async def sync_upstream_repository(context: AppContext, course) -> None:
         # Merge the upstream tracking branch into the merge branch
         merge_conflicts = git_merge(InstructorClassRepo.ORIGIN_TRACKING_BRANCH, commit=False, path=repo_root)
         gather_overwritable_paths() # pick up paths introduced by the merge head
-        rename_merge_conflicts(merge_conflicts)
+        rename_merge_conflicts(merge_conflicts, source="MERGE_HEAD") # restore conflicts using their incoming version from the MERGE_HEAD
         
         commit(None, no_edit=True, path=repo_root)
 
@@ -596,7 +599,7 @@ async def sync_upstream_repository(context: AppContext, course) -> None:
         pop_stash(path=repo_root)
         stash_conflicts = git_diff_status(diff_filter="U", path=repo_root)
         gather_overwritable_paths() # technically, not really necessary since we gather before stashing.
-        rename_merge_conflicts(stash_conflicts)
+        rename_merge_conflicts(stash_conflicts, source="HEAD")
 
     except Exception as e:
         # Cleanup the merge branch and return to main
@@ -630,7 +633,9 @@ async def sync_upstream_repository(context: AppContext, course) -> None:
     except Exception as e:
         # Merging from temp to actual branch failed.
         print(f"Fatal: Failed to merge the merge staging branch into actual branch", e)
-        abort_merge(path=repo_root)
+        # Try to abort the merge, if started and unconcluded.
+        try: abort_merge(path=repo_root)
+        except: print("(failed to abort)")
     
     finally:
         delete_local_branch(merge_branch_name, force=True, path=repo_root)
@@ -644,7 +649,7 @@ async def setup_backend(context: AppContext):
         await create_repo_root_if_not_exists(context)
         await create_ssh_config_if_not_exists(context, course)
         await set_git_authentication(context, course, instructor)
-        await clone_repo_if_not_exists(context, course)
+        await clone_repo_if_not_exists(context, course, instructor)
         await set_root_folder_permissions(context)
         while True:
             print("Pulling in upstream changes...")
