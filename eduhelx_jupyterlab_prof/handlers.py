@@ -475,7 +475,6 @@ async def set_root_folder_permissions(context: AppContext) -> None:
 async def sync_upstream_repository(context: AppContext, course) -> None:
 
     def gather_overwritable_paths():
-        nonlocal overwritable_paths
         for assignment in assignments:
             for glob_pattern in assignment["overwritable_files"]:
                 overwritable_paths.update((repo_root / assignment["directory_path"]).glob(glob_pattern))
@@ -502,7 +501,6 @@ async def sync_upstream_repository(context: AppContext, course) -> None:
                 git_rm(conflict, cached=False, path=repo_root)
 
     def backup_file(conflict_path: Path):
-        nonlocal file_contents
         print("BACKING UP FILE", conflict_path)
         full_conflict_path = repo_root / conflict_path
         if full_conflict_path in file_contents:
@@ -514,7 +512,6 @@ async def sync_upstream_repository(context: AppContext, course) -> None:
             print(str(conflict_path), "deleted locally, cannot create a backup.")
 
     def move_untracked_files():
-        nonlocal untracked_files, repo_root
         for file in untracked_files:
             untracked_path = untracked_files_dir / file
             untracked_path.parent.mkdir(parents=True, exist_ok=True)
