@@ -54,6 +54,8 @@ export interface AssignmentResponse {
     absolute_directory_path: string
     master_notebook_path: string
     student_notebook_path: string
+    protected_files: string[]
+    overwritable_files: string[]
     created_date: string
     available_date: string | null
     due_date: string | null

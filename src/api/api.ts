@@ -1,4 +1,5 @@
 import qs from 'qs'
+import p from 'path'
 import { ServerConnection } from '@jupyterlab/services'
 import { requestAPI } from '../handler'
 import { IAssignment, Assignment, ICurrentAssignment } from './assignment'
@@ -136,4 +137,35 @@ export async function syncToLMS(): Promise<void> {
     await requestAPI<void>(`/sync_to_lms`, {
         method: 'POST'
     })
+}
+
+export async function createFile(path: string, content: string): Promise<void> {
+    const directoryPath = p.dirname(path)
+    const ext = p.extname(path)
+    // Create a new file
+    const { name } = await requestAPI<any>(`/api/contents/${ directoryPath }`, {
+        method: 'POST',
+        body: JSON.stringify({
+            type: "file",
+            directoryPath
+        })
+    }, true)
+    // Rename the file
+    await requestAPI(`/api/contents/${ directoryPath }/${ name }`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+            path
+        })
+    }, true)
+    // Set the file's contents
+    await requestAPI(`/api/contents/${ path }`, {
+        method: 'PUT',
+        body: JSON.stringify({
+            format: "text",
+            type: "file",
+            path,
+            content
+        })
+    }, true)
+
 }

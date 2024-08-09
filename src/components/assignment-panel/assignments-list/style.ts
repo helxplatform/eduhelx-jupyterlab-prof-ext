@@ -38,7 +38,7 @@ export const downloadAssignmentButtonClass = style({
 
 export const assignmentsListClass = (style as any)({
     flexGrow: 1,
-    // height: 0,
+    height: 0,
     overflowY: 'auto',
     padding: 0,
     /** Adjusting clashing styles caused by using accordion summaries as ListItem components */

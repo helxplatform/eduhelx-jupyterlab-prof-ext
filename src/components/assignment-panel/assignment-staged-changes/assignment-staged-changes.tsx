@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { folderIcon, fileIcon } from '@jupyterlab/ui-components'
 import { assignmentStagedChangesClass, assignmentStagedChangesFolderIconClass, largeBulletClass, modifiedTypeBadgeClass, showMoreBtnClass, stagedChangeListItemClass, stagedChangesListClass } from './style'
 import { TextDivider } from '../../text-divider'
+import { InfoTooltip } from '../../info-tooltip'
 import { useAssignment } from '../../../contexts'
 import { IStagedChange } from '../../../api/staged-change'
 
@@ -89,6 +90,12 @@ export const AssignmentStagedChanges = ({ ...props }: AssignmentStagedChangesPro
             }}>
                 <h3 style={{ fontSize: 15, marginBottom: 12, fontWeight: 500 }}>
                     No Changes
+                    <InfoTooltip
+                        title="Files included in your .gitignore will not appear here."
+                        trigger="hover"
+                        placement="right"
+                        iconProps={{ style: { fontSize: 13, marginLeft: 6, color: "var(--jp-content-font-color2)" } }}
+                    />
                 </h3>
                 <p style={{ fontSize: 13, marginTop: 0 }}>
                     Files you've changed since your last submission will appear here.

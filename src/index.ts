@@ -12,12 +12,14 @@ import { AssignmentWidget } from './widgets'
 import { EduhelxSubmissionModel } from './model'
 import { submissionIcon } from './style/icons'
 import { IFileBrowserFactory } from '@jupyterlab/filebrowser'
+import { ISettingRegistry } from '@jupyterlab/settingregistry'
 
 async function activate (
   app: JupyterFrontEnd,
   fileBrowser: IDefaultFileBrowser,
   restorer: ILayoutRestorer,
   shell: ILabShell,
+  settingRegistry: ISettingRegistry
 ) {
   let serverSettings: IServerSettings
   try {
@@ -31,6 +33,14 @@ async function activate (
     )
     return
   }
+
+  Promise.all([app.restored, fileBrowser.model.restored]).then(() => {
+    // A couple things are required to get jupyter to show dotfiles/~ files/etc.
+    // This browser setting needs to be enabled for filebrowser, as well as
+    // the server setting ContentsManager.allow_hidden=True
+    settingRegistry.set("@jupyterlab/filebrowser-extension:browser", "showHiddenFiles", true)
+  })
+
 
   // const model = new EduhelxSubmissionModel()
   // Promise.all([app.restored, fileBrowser.model.restored]).then(() => {
@@ -61,6 +71,7 @@ const plugin: JupyterFrontEndPlugin<void> = {
     IDefaultFileBrowser,
     ILayoutRestorer,
     ILabShell,
+    ISettingRegistry
   ],
   activate
 };

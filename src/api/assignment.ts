@@ -47,6 +47,8 @@ export class Assignment implements IAssignment {
         private _absoluteDirectoryPath: string,
         private _masterNotebookPath: string,
         private _studentNotebookPath: string,
+        private _protectedFiles: string[],
+        private _overwritableFiles: string[],
         private _createdDate: Date,
         private _availableDate: Date | null,
         private _dueDate: Date | null,
@@ -69,6 +71,8 @@ export class Assignment implements IAssignment {
     get absoluteDirectoryPath() { return this._absoluteDirectoryPath }
     get masterNotebookPath() { return this._masterNotebookPath }
     get studentNotebookPath() { return this._studentNotebookPath }
+    get protectedFiles() { return this._protectedFiles }
+    get overwritableFiles() { return this._overwritableFiles }
     get createdDate() { return this._createdDate }
     get availableDate() { return this._availableDate }
     get dueDate() { return this._dueDate }
@@ -95,6 +99,8 @@ export class Assignment implements IAssignment {
             data.absolute_directory_path,
             data.master_notebook_path,
             data.student_notebook_path,
+            data.protected_files,
+            data.overwritable_files,
             new Date(data.created_date),
             data.available_date ? new Date(data.available_date) : null,
             data.due_date ? new Date(data.due_date) : null,
