@@ -84,7 +84,7 @@ jobs:
         pip install "jupyterlab>=4.0.0,<5" eduhelx_jupyterlab_prof*.whl
 
 
-        jupyter server extension list --verbose
+        jupyter server extension list --debug
         jupyter server extension list 2>&1 | grep -ie "eduhelx_jupyterlab_prof.*OK"
 
         jupyter labextension list
