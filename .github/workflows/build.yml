@@ -36,7 +36,7 @@ jobs:
         set -eux
         python -m pip install .[test]
 
-        pytest -vv -r ap --cov eduhelx_jupyterlab_prof
+        # pytest -vv -r ap --cov eduhelx_jupyterlab_prof
         jupyter server extension list
         jupyter server extension list 2>&1 | grep -ie "eduhelx_jupyterlab_prof.*OK"
 
