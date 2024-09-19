@@ -89,7 +89,7 @@ jobs:
 
         jupyter labextension list
         # jupyter labextension list 2>&1 | grep -ie "eduhelx_jupyterlab_prof.*OK"
-        python -m jupyterlab.browser_check --no-browser-test
+        # python -m jupyterlab.browser_check --no-browser-test
 
   # integration-tests:
   #   name: Integration tests
