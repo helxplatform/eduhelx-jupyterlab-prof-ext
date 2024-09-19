@@ -69,7 +69,7 @@ jobs:
     - name: Install Python
       uses: actions/setup-python@v4
       with:
-        python-version: '3.9'
+        python-version: '3.10'
         architecture: 'x64'
     - uses: actions/download-artifact@v3
       with:
@@ -84,7 +84,7 @@ jobs:
         pip install "jupyterlab>=4.0.0,<5" eduhelx_jupyterlab_prof*.whl
 
 
-        jupyter server extension list --debug
+        jupyter server extension list
         jupyter server extension list 2>&1 | grep -ie "eduhelx_jupyterlab_prof.*OK"
 
         jupyter labextension list
