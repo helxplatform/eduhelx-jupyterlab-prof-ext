@@ -4,7 +4,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    command: jupyter lab
+    command: bash -c "jupyter lab"
     ports:
       - "8888:8888"
     environment:
@@ -20,6 +20,6 @@ services:
       context: .
       dockerfile: Dockerfile
     working_dir: /home/jovyan/eduhelx-jupyterlab-prof-ext
-    command: bash -c "npm i -g typescript && jlpm watch"
+    command: bash -c "jlpm watch"
     volumes:
       - .:/home/jovyan/eduhelx-jupyterlab-prof-ext

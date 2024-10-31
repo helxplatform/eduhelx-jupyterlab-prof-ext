@@ -4,6 +4,7 @@ USER root
 
 RUN curl -sSL https://deb.nodesource.com/setup_22.x | bash -
 RUN apt-get install nodejs
+RUN npm i -g typescript@5.3.3
 
 COPY . /home/$NB_USER/eduhelx-jupyterlab-prof-ext
 
