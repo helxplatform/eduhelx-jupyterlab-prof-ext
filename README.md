@@ -48,20 +48,21 @@ jupyter labextension list
 
 ### Development install
 
-You can either run via Docker or install the extension into your local Jupyter installation in development mode
+You can either run via Docker or install the extension into your local Jupyter installation in development mode.
 
 #### Local Docker environment
 Run the extension locally in Docker via `docker-compose`:
 
 1. Configure your environment for running inside Docker. Also see: `.env.docker.sample`.
 ```
+export COMPOSE_PROJECT_NAME=jlp
 export GRADER_API_URL=http://host.docker.internal:8000
 export USER_NAME="username"
 export USER_AUTOGEN_PASSWORD="password"
 export GITEA_SSH_URL=ssh://git@host.docker.internal:2222
 ```
 In this scenario, you'd either be port-forwarding or running the [Grader API](https://github.com/helxplatform/eduhelx-grader-api)
-on port 8000, and port-forwarding your Gitea SSH service to port 2222. You can a password for a user by decoding their credential secret.
+on port 8000, and port-forwarding your Gitea SSH service to port 2222. You can find the password for a user by decoding their credential secret.
 
 You can also define a separate environment file specifically for working in Docker:
 ```bash
@@ -75,7 +76,8 @@ set -a && source .env.docker
 docker-compose up
 ```
 
-3. Open the authenticated Jupyter URL
+3. Open the authenticated Jupyter URL.
+
 Jupyterlab will run on `localhost:8888`, but it requires an authentication token to access the UI.
 The jupyter container will log the authenticated URL for accessing the UI at startup,
 but you can also run the following to recover the token:
