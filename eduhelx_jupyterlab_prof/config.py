@@ -18,7 +18,7 @@ class Config:
     USER_NAME: str
     ACCESS_TOKEN: str = ""
     USER_AUTOGEN_PASSWORD: str = ""
-    LOCAL: bool = False
+    GITEA_SSH_URL: str = ""
     UPSTREAM_SYNC_INTERVAL: int = 60
     # Which credential helper to use in Git
     CREDENTIAL_HELPER: str = "store"
