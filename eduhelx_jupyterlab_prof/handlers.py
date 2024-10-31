@@ -433,7 +433,7 @@ async def create_ssh_config_if_not_exists(context: AppContext, course) -> None:
     if not urlparse(ssh_public_url).scheme:
         ssh_public_url = "ssh://" + ssh_public_url
 
-    ssh_private_url = settings["gitea_ssh_url"] if not context.config.LOCAL else "ssh://git@localhost:2222"
+    ssh_private_url = settings["gitea_ssh_url"] if not context.config.GITEA_SSH_URL else context.config.GITEA_SSH_URL
     if not urlparse(ssh_private_url).scheme:
         ssh_private_url = "ssh://" + ssh_private_url 
 

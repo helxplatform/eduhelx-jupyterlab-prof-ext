@@ -1,0 +1,25 @@
+version: "3"
+services:
+  jupyter:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: bash -c "jupyter lab"
+    ports:
+      - "8888:8888"
+    environment:
+      - GRADER_API_URL
+      - USER_NAME
+      - USER_AUTOGEN_PASSWORD
+      - GITEA_SSH_URL
+    volumes:
+      - .:/home/jovyan/eduhelx-jupyterlab-prof-ext
+      - ./eduhelx-mount:/home/jovyan/eduhelx
+  watch:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    working_dir: /home/jovyan/eduhelx-jupyterlab-prof-ext
+    command: bash -c "jlpm watch"
+    volumes:
+      - .:/home/jovyan/eduhelx-jupyterlab-prof-ext

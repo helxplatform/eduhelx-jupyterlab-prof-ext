@@ -10,6 +10,7 @@ node_modules/
 eduhelx_jupyterlab_prof/labextension
 # Version file is handled by hatchling
 eduhelx_jupyterlab_prof/_version.py
+eduhelx-mount
 
 # Integration tests
 ui-tests/test-results/
@@ -29,6 +30,7 @@ __pycache__/
 
 # Environments
 .env
+.env.docker
 .venv
 env/
 venv/
