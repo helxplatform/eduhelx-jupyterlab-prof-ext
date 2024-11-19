@@ -20,5 +20,5 @@
     "target": "ES2018",
     "types": ["node", "jest"]
   },
-  "include": ["src/**/*"]
+  "include": ["src/**/*", ".eslintrc.js"]
 }

@@ -18,7 +18,7 @@ export const AssignmentPanel = ({}: IAssignmentPanelProps) => {
     const commands = useCommands()!
     const snackbar = useSnackbar()!
     const { repoRoot, documentationUrl } = useSettings()!
-    const { course, students, assignment, triggerImmediateUpdate } = useAssignment()!
+    const { course, students, assignment } = useAssignment()!
     
     const [syncLoading, setSyncLoading] = useState<boolean>(false)
 
@@ -38,7 +38,6 @@ export const AssignmentPanel = ({}: IAssignmentPanelProps) => {
         setSyncLoading(true)
         try {
             await syncToLMS()
-            await triggerImmediateUpdate()
             snackbar.open({
                 type: 'success',
                 message: 'Successfully synced with LMS'
@@ -50,7 +49,7 @@ export const AssignmentPanel = ({}: IAssignmentPanelProps) => {
             })
         }
         setSyncLoading(false)
-    }, [triggerImmediateUpdate, snackbar])
+    }, [snackbar])
 
     const openDocumentation = useCallback(() => {
         if (!documentationUrl) return

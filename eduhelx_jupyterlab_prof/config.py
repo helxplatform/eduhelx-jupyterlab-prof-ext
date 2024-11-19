@@ -1,6 +1,7 @@
 import os
 from typing import get_type_hints, Union
 from jupyter_server.serverapp import ServerApp
+from urllib.parse import urlparse, urlunparse
 
 validators = []
 
@@ -91,6 +92,15 @@ class Config:
         if not value.endswith("/"):
             value += "/"
         return value
+    
+    @property
+    def GRADER_API_WS_URL(self) -> str:
+        parsed_url = urlparse(self.GRADER_API_URL)
+        if parsed_url.scheme == "https": scheme = "wss"
+        else: scheme = "ws"
+        
+        return parsed_url._replace(scheme=scheme, path=parsed_url.path + "api/v1/websocket").geturl()
+
 
     def __repr__(self):
         return str(self.__dict__)

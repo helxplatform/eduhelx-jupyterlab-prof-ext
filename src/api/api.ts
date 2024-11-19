@@ -14,9 +14,12 @@ import {
     SubmissionResponse,
     ServerSettingsResponse,
     InstructorResponse,
+    JobStatusResponse,
+    JobResultResponse,
 } from './api-responses'
 import { IInstructor, Instructor } from './instructor'
 import { IStagedChange } from './staged-change'
+import { IJobResult, IJobStatus, JobResult, JobStatus } from './job'
 
 export interface UpdateAssignmentData {
     name?: string | null,
@@ -42,29 +45,34 @@ export interface NotebookFilesResponse {
     notebooks: { [assignmentId: string]: string[] }
 }
 
-export async function restoreFile(stagedChange: IStagedChange): Promise<void> {
+export async function restoreFile(stagedChange: IStagedChange, requestOptions: RequestInit={}): Promise<void> {
     await requestAPI<void>(`/restore_file`, {
         method: 'PUT',
         body: JSON.stringify({
             path_from_repo_root: stagedChange.pathFromRepositoryRoot
-        })
+        }),
+        ...requestOptions
     })
 }
 
-export async function listNotebookFiles(): Promise<NotebookFilesResponse> {
+export async function listNotebookFiles(requestOptions: RequestInit={}): Promise<NotebookFilesResponse> {
     const data = await requestAPI<NotebookFilesResponse>(`/notebook_files`, {
-        method: 'GET'
+        method: 'GET',
+        ...requestOptions
     })
     return data
 }
 
-export async function getInstructorAndStudentsAndCourse(): Promise<GetInstructorAndStudentsAndCourseResponse> {
+export async function getInstructorAndStudentsAndCourse(
+    requestOptions: RequestInit={}
+): Promise<GetInstructorAndStudentsAndCourseResponse> {
     const { instructor, students, course } = await requestAPI<{
         instructor: InstructorResponse
         students: StudentResponse[]
         course: CourseResponse
     }>(`/course_instructor_students`, {
-        method: 'GET'
+        method: 'GET',
+        ...requestOptions
     })
     return {
         instructor: Instructor.fromResponse(instructor),
@@ -74,13 +82,14 @@ export async function getInstructorAndStudentsAndCourse(): Promise<GetInstructor
 }
 
 
-export async function getAssignments(path: string): Promise<GetAssignmentsResponse> {
+export async function getAssignments(path: string, requestOptions: RequestInit={}): Promise<GetAssignmentsResponse> {
     const queryString = qs.stringify({ path })
     const { assignments, current_assignment } = await requestAPI<{
         assignments: AssignmentResponse[] | null
         current_assignment: AssignmentResponse | null
     }>(`/assignments?${ queryString }`, {
-        method: 'GET'
+        method: 'GET',
+        ...requestOptions
     })
     return {
         assignments: assignments ? assignments.map((data) => Assignment.fromResponse(data)) : null,
@@ -88,27 +97,34 @@ export async function getAssignments(path: string): Promise<GetAssignmentsRespon
     }
 }
 
-export async function updateAssignment(assignmentName: string, data: UpdateAssignmentData): Promise<void> {
+export async function updateAssignment(
+    assignmentName: string,
+    data: UpdateAssignmentData,
+    requestOptions: RequestInit={}
+): Promise<void> {
     const queryString = qs.stringify({ name: assignmentName })
     await requestAPI<void>(`/assignments?${ queryString }`, {
         method: 'PATCH',
-        body: JSON.stringify(data)
+        body: JSON.stringify(data),
+        ...requestOptions
     })
 }
 
-export async function gradeAssignment(currentPath: string): Promise<void> {
+export async function gradeAssignment(currentPath: string, requestOptions: RequestInit={}): Promise<void> {
     await requestAPI<void>(`/grade_assignment`, {
         method: 'POST',
         body: JSON.stringify({
             current_path: currentPath
-        })
+        }),
+        ...requestOptions
     })
 }
 
-export async function getServerSettings(): Promise<IServerSettings> {
+export async function getServerSettings(requestOptions: RequestInit={}): Promise<IServerSettings> {
     try {
         const data = await requestAPI<ServerSettingsResponse>('/settings', {
-            method: 'GET'
+            method: 'GET',
+            ...requestOptions
         })
         return ServerSettings.fromResponse(data)
     } catch (e) {
@@ -133,24 +149,36 @@ export async function getServerSettings(): Promise<IServerSettings> {
 
 export async function uploadAssignment(
     currentPath: string,
-    summary: string
+    summary: string,
+    requestOptions: RequestInit={}
 ): Promise<void> {
     const res = await requestAPI<void>(`/submit_assignment`, {
         method: 'POST',
         body: JSON.stringify({
             summary,
             current_path: currentPath
-        })
+        }),
+        ...requestOptions
     })
 }
 
-export async function syncToLMS(): Promise<void> {
-    await requestAPI<void>(`/sync_to_lms`, {
-        method: 'POST'
+export async function getLMSSyncStatus(requestOptions: RequestInit={}): Promise<IJobStatus | null> {
+    const data = await requestAPI<JobStatusResponse>(`/sync_to_lms`, {
+        method: 'GET',
+        ...requestOptions
     })
+    return data !== null ? JobStatus.fromResponse(data) : null
 }
 
-export async function createFile(path: string, content: string): Promise<void> {
+export async function syncToLMS(requestOptions: RequestInit={}): Promise<IJobStatus> {
+    const data = await requestAPI<JobStatusResponse>(`/sync_to_lms`, {
+        method: 'POST',
+        ...requestOptions
+    })
+    return JobStatus.fromResponse(data)
+}
+
+export async function createFile(path: string, content: string, requestOptions: RequestInit={}): Promise<void> {
     const directoryPath = p.dirname(path)
     const ext = p.extname(path)
     // Create a new file
@@ -159,14 +187,16 @@ export async function createFile(path: string, content: string): Promise<void> {
         body: JSON.stringify({
             type: "file",
             directoryPath
-        })
+        }),
+        ...requestOptions
     }, true)
     // Rename the file
     await requestAPI(`/api/contents/${ directoryPath }/${ name }`, {
         method: 'PATCH',
         body: JSON.stringify({
             path
-        })
+        }),
+        ...requestOptions
     }, true)
     // Set the file's contents
     await requestAPI(`/api/contents/${ path }`, {
@@ -176,16 +206,34 @@ export async function createFile(path: string, content: string): Promise<void> {
             type: "file",
             path,
             content
-        })
+        }),
+        ...requestOptions
     }, true)
 
 }
 
-export async function createStudentNotebook(assignmentId: number): Promise<void> {
+export async function createStudentNotebook(assignmentId: number, requestOptions: RequestInit={}): Promise<void> {
     await requestAPI<void>(`/create_student_notebook`, {
         method: 'POST',
         body: JSON.stringify({
             assignment_id: assignmentId
-        })
+        }),
+        ...requestOptions
     })
+}
+
+export async function getJobStatus(jobId: string, requestOptions: RequestInit={}): Promise<IJobStatus> {
+    const data = await requestAPI<JobStatusResponse>(`/job_status`, {
+        method: 'POST',
+        ...requestOptions
+    })
+    return JobStatus.fromResponse(data)
+}
+
+export async function getJobResult(jobId: string, requestOptions: RequestInit={}): Promise<IJobResult> {
+    const data = await requestAPI<JobResultResponse>(`/job_result`, {
+        method: 'POST',
+        ...requestOptions
+    })
+    return JobResult.fromResponse(data)
 }

@@ -5,7 +5,7 @@ import { CommandRegistry } from '@lumino/commands'
 import { StylesProvider } from '@material-ui/core/styles'
 import { AssignmentPanel } from '../components'
 import { IServerSettings } from '../api'
-import { AssignmentProvider, CommandsProvider, SettingsProvider, BackdropProvider, SnackbarProvider } from '../contexts'
+import { AssignmentProvider, CommandsProvider, SettingsProvider, BackdropProvider, SnackbarProvider, WebsocketProvider } from '../contexts'
 import { IEduhelxSubmissionModel } from '../tokens'
 
 export class AssignmentWidget extends ReactWidget {
@@ -32,9 +32,11 @@ export class AssignmentWidget extends ReactWidget {
                     <SettingsProvider settings={ this.serverSettings }>
                         <BackdropProvider>
                             <SnackbarProvider>
-                                <AssignmentProvider fileBrowser={ this.fileBrowser }>
-                                    <AssignmentPanel />
-                                </AssignmentProvider>
+                                <WebsocketProvider>
+                                    <AssignmentProvider fileBrowser={ this.fileBrowser }>
+                                        <AssignmentPanel />
+                                    </AssignmentProvider>
+                                </WebsocketProvider>
                             </SnackbarProvider>
                         </BackdropProvider>
                     </SettingsProvider>

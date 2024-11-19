@@ -27,6 +27,33 @@ export interface UserResponse {
     email: string
 }
 
+export enum JobStatusEnum {
+    PENDING = 'pending',
+    RECEIVED = 'received',
+    STARTED = 'started',
+    RETRY = 'retry',
+    FAILURE = 'failure',
+    SUCCESS = 'success',
+    REVOKED = 'revoked'
+}
+
+export interface JobStatusResponse {
+    id: string
+    type: string | null
+    status: JobStatusEnum
+}
+
+export interface JobResultResponse extends JobStatusResponse {
+    result: any
+    ready: boolean
+    successful: boolean
+    failed: boolean
+    queue: string | null
+    retries: number | null
+    traceback: string | null
+    finished_date: string | null
+}
+
 export interface InstructorResponse extends UserResponse {
     user_type: UserType.INSTRUCTOR
 }

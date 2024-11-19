@@ -29,7 +29,8 @@ dependencies = [
     "eduhelx_utils@git+https://github.com/helxplatform/eduhelx-utils",
     "otter-grader==5.5.0",
     "nbformat==5.10.4",
-    "gitignore-parser==0.1.11"
+    "gitignore-parser==0.1.11",
+    "websockets==14.1"
 ]
 dynamic = ["version", "description", "authors", "urls", "keywords"]
 

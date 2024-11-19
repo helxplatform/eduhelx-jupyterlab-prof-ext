@@ -30,14 +30,14 @@ const ModifiedTypeBadge = ({ modificationType }: ModifiedTypeBadgeProps) => {
         switch (modificationType) {
             case "??": {
                 return [
-                    <span style={{ fontWeight: 500 }}>+</span>,
+                    <span key={ 1 } style={{ fontWeight: 500 }}>+</span>,
                     "Added (untracked)",
                     "var(--md-green-500)"
                 ]
             }
             case "M": {
                 return [
-                    <span className={ largeBulletClass } style={{ backgroundColor: "var(--md-orange-500)" }} />,
+                    <span key={ 2 } className={ largeBulletClass } style={{ backgroundColor: "var(--md-orange-500)" }} />,
                     "Modified",
                     undefined
                 ]
@@ -46,7 +46,7 @@ const ModifiedTypeBadge = ({ modificationType }: ModifiedTypeBadgeProps) => {
                 return [
                     // Could also use a minus and boost its font-size to like 18px and make its line-height to 1
                     // but its too small at normal font size
-                    <span style={{ fontWeight: 500}}>D</span>,
+                    <span key={ 3 } style={{ fontWeight: 500}}>D</span>,
                     "Deleted",
                     "var(--md-red-500)"
                 ]
@@ -74,7 +74,7 @@ const ModifiedTypeBadge = ({ modificationType }: ModifiedTypeBadgeProps) => {
 
 export const RestoreFileButton = ({ stagedChange }: RestoreFileButtonProps) => {
     const [loading, setLoading] = useState<boolean>(false)
-    const { triggerImmediateUpdate } = useAssignment()!
+    const { updateNotebookFiles } = useAssignment()!
     const snackbar = useSnackbar()!
     
     const restoreFile = useCallback(async () => {
@@ -102,11 +102,11 @@ export const RestoreFileButton = ({ stagedChange }: RestoreFileButtonProps) => {
             })
         }
         try {
-            await triggerImmediateUpdate()
+            await updateNotebookFiles()
         } catch {}
 
         setLoading(false)
-    }, [snackbar, stagedChange, triggerImmediateUpdate])
+    }, [snackbar, stagedChange, updateNotebookFiles])
 
     return (
         <Tooltip title={ !loading ? "Restore this file to its previous revision" : "Loading..." }>
@@ -127,7 +127,7 @@ export const RestoreFileButton = ({ stagedChange }: RestoreFileButtonProps) => {
 }
 
 export const AssignmentStagedChanges = ({ ...props }: AssignmentStagedChangesProps) => {
-    const { assignment } = useAssignment()!
+    const { assignment, jobStatusMap } = useAssignment()!
     const commands = useCommands()
     const [showMore, setShowMore] = useState<boolean>(false)
 
@@ -191,8 +191,9 @@ export const AssignmentStagedChanges = ({ ...props }: AssignmentStagedChangesPro
                     No Changes
                     { ignoredFilesInfoPopover }
                 </h3>
+                <pre>{ JSON.stringify(jobStatusMap) }</pre>
                 <p style={{ fontSize: 13, margin: 0 }}>
-                    Files you've changed since your last submission will appear here.
+                    Files you&apos;ve changed since your last submission will appear here.
                     Anything listed under your&nbsp;
                     <Button
                         type="link"
@@ -203,7 +204,7 @@ export const AssignmentStagedChanges = ({ ...props }: AssignmentStagedChangesPro
                     &nbsp;is excluded from this list. 
                 </p>
                 <p style={{ fontSize: 13 }}>
-                    Don't worry if you've only changed master notebooks, you can still submit and
+                    Don&apos;t worry if you&apos;ve only changed master notebooks, you can still submit and
                     the student version will be generated and uploaded upon submission.
                 </p>
             </div>
@@ -218,7 +219,7 @@ export const AssignmentStagedChanges = ({ ...props }: AssignmentStagedChangesPro
             <div className={ stagedChangesListClass }>
             {
                 stagedChangesSource.slice(0, showMore ? undefined : SHOW_MORE_CUTOFF).map((change) => (
-                    <div className={ stagedChangeListItemClass }>
+                    <div key={ change.pathFromAssignmentRoot } className={ stagedChangeListItemClass }>
                         <div style={{ display: "flex", alignItems: "center" }}>
                             { change.type === "directory" ? (
                                 <folderIcon.react
