@@ -58,18 +58,18 @@
     "watch:labextension": "jupyter labextension watch ."
   },
   "dependencies": {
-    "@jupyterlab/application": "^4.0.0",
-    "@jupyterlab/apputils": "^4.0.0",
-    "@jupyterlab/coreutils": "^6.0.0",
+    "@jupyterlab/application": "^4.0.11",
+    "@jupyterlab/apputils": "^4.1.11",
+    "@jupyterlab/coreutils": "^6.0.11",
     "@jupyterlab/filebrowser": "^4.0.11",
-    "@jupyterlab/services": "^7.0.0",
-    "@jupyterlab/settingregistry": "^4.2.4",
+    "@jupyterlab/services": "^7.0.11",
+    "@jupyterlab/settingregistry": "^4.0.11",
     "@jupyterlab/ui-components": "^4.0.11",
-    "@lumino/commands": "^2.0.0",
-    "@lumino/coreutils": "^2.1.2",
-    "@lumino/disposable": "^2.1.2",
-    "@lumino/signaling": "^2.1.2",
-    "@lumino/widgets": "^2.2.0",
+    "@lumino/commands": "^2.0.1",
+    "@lumino/coreutils": "^2.0.0",
+    "@lumino/disposable": "^2.0.0",
+    "@lumino/signaling": "^2.0.0",
+    "@lumino/widgets": "^2.0.1",
     "@material-ui/core": "^4.12.4",
     "@material-ui/icons": "^4.5.1",
     "@material-ui/lab": "^4.0.0-alpha.39",
@@ -115,7 +115,7 @@
     "stylelint-config-standard": "^26.0.0",
     "stylelint-prettier": "^2.0.0",
     "typescript": "~5.0.2",
-    "yjs": "^13.5.0"
+    "yjs": "^13.5.40"
   },
   "sideEffects": [
     "style/*.css",
