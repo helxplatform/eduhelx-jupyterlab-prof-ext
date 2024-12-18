@@ -1,18 +1,15 @@
 import {
-  ILayoutRestorer,
   ILabShell,
+  ILayoutRestorer,
   JupyterFrontEnd,
   JupyterFrontEndPlugin
 } from '@jupyterlab/application'
-import { FileBrowserModel, IDefaultFileBrowser } from '@jupyterlab/filebrowser'
 import { Dialog, showErrorMessage } from '@jupyterlab/apputils'
-import { IChangedArgs } from '@jupyterlab/coreutils'
-import { getServerSettings, IServerSettings } from './api'
-import { AssignmentWidget } from './widgets'
-import { EduhelxSubmissionModel } from './model'
-import { submissionIcon } from './style/icons'
-import { IFileBrowserFactory } from '@jupyterlab/filebrowser'
+import { IDefaultFileBrowser } from '@jupyterlab/filebrowser'
 import { ISettingRegistry } from '@jupyterlab/settingregistry'
+import { getServerSettings, IServerSettings } from './api'
+import { submissionIcon } from './style/icons'
+import { AssignmentWidget } from './widgets'
 
 async function activate (
   app: JupyterFrontEnd,
@@ -71,7 +68,7 @@ const plugin: JupyterFrontEndPlugin<void> = {
     IDefaultFileBrowser,
     ILayoutRestorer,
     ILabShell,
-    ISettingRegistry
+    ISettingRegistry as any
   ],
   activate
 };
