@@ -39,12 +39,14 @@ export enum JobStatusEnum {
 
 export interface JobStatusResponse {
     id: string
-    type: string | null
+    // May be undefined for PENDING statuses
+    type?: string | null
     status: JobStatusEnum
 }
 
 export interface JobResultResponse extends JobStatusResponse {
     result: any
+    type: string | null
     ready: boolean
     successful: boolean
     failed: boolean

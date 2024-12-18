@@ -81,7 +81,7 @@ class BaseHandler(APIHandler):
             self.set_status(exc.response.status_code)
             self.finish(exc.response.text)
 
-class WebsocketHandler(WSMixin, WSHandler, JupyterHandler):
+class WebsocketHandler(WSMixin, WSHandler, BaseHandler):
     clients = []
     queued_messages = []
     grader_websocket_client = None

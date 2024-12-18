@@ -37,6 +37,7 @@ export const AssignmentInfo = ({  }: AssignmentInfoProps) => {
     // We need the raw undebounced value so that other parts of the UI can respond immediately to the expected value
     const [availableDateControlled, setAvailableDateControlled] = useState<string|undefined>(formatDateToMui(assignment?.availableDate))
     const [dueDateControlled, setDueDateControlled] = useState<string|undefined>(formatDateToMui(assignment?.dueDate))
+    const [manualGradingControlled, setManualGradingControlled] = useState<boolean|undefined>(assignment?.manualGrading)
     const [gradedNotebookControlled, setGradedNotebookControlled] = useState<string|undefined>(assignment?.masterNotebookPath)
     const [creatingTemplateNotebook, setCreatingTemplateNotebook] = useState<boolean>(false)
     const [creatingStudentNotebook, setCreatingStudentNotebook] = useState<boolean>(false)
@@ -177,7 +178,7 @@ export const AssignmentInfo = ({  }: AssignmentInfoProps) => {
                 const error = await e.response.json()
                 snackbar.open({
                     type: 'error',
-                    message: `Failed to update: ${ error.message }`
+                    message: `Failed to update: ${ error.message ?? "network error" }`
                 })
             }
         }()
@@ -191,28 +192,48 @@ export const AssignmentInfo = ({  }: AssignmentInfoProps) => {
                     due_date: newDate
                 })
             } catch (e: any) {
-                const error = await e.response.json()
+                const error = await e.response?.json()
                 snackbar.open({
                     type: 'error',
-                    message: `Failed to update: ${ error.message }`
+                    message: `Failed to update: ${ error.message ?? "network error" }`
                 })
             }
         }()
     }, 1000, { leading: true })
 
     const onManualGradingChanged = useDebouncedCallback((e: ChangeEvent<HTMLInputElement>) => {
+        const manualGrading = e.target.checked
         void async function() {
-            await updateAssignment(assignment.name, {
-                manual_grading: e.target.checked
-            })
+            setManualGradingControlled(manualGrading)
+            try {
+                await updateAssignment(assignment.name, {
+                    manual_grading: manualGrading
+                })
+            } catch (e: any) {
+                // Revert optimistic update back to original value
+                setManualGradingControlled(!manualGrading)
+                const error = await e.response?.json()
+                snackbar.open({
+                    type: "error",
+                    message: `Failed to update: ${ error.message ?? "network error" }`
+                })
+            }
         }()
     }, 1000, { leading: true })
 
     const onGradedNotebookChanged = useDebouncedCallback((e: ChangeEvent<HTMLInputElement>) => {
         void async function() {
-            await updateAssignment(assignment.name, {
-                master_notebook_path: e.target.value
-            })
+            try {
+                await updateAssignment(assignment.name, {
+                    master_notebook_path: e.target.value
+                })
+            } catch (e: any) {
+                const error = await e.response?.json()
+                snackbar.open({
+                    type: "error",
+                    message: `Failed to update: ${ error.message ?? "network error" }`
+                })
+            }
         }()
     }, 1000, { leading: true })
 
@@ -233,7 +254,7 @@ export const AssignmentInfo = ({  }: AssignmentInfoProps) => {
             showErrorMessage(
                 'Failed to generate student notebook',
                 {
-                    message: <pre>{ data.error }</pre>
+                    message: <pre>{ data.error ?? "network error" }</pre>
                 },
                 [Dialog.warnButton({ label: 'Dismiss' })]
             )
@@ -247,6 +268,7 @@ export const AssignmentInfo = ({  }: AssignmentInfoProps) => {
         
         const assignmentNotebooks = notebookFiles[assignment.id]
         const computeUniqueNotebookName = () => {
+            // eslint-disable-next-line
             for (let i=0; true; i++) {
                 const name = `${ assignment.name }${ i ? " (" + i + ")" : ""}.ipynb`
                 if (!assignmentNotebooks.includes(name)) return name
@@ -316,6 +338,7 @@ export const AssignmentInfo = ({  }: AssignmentInfoProps) => {
     useEffect(() => {
         setAvailableDateControlled(formatDateToMui(assignment.availableDate))
         setDueDateControlled(formatDateToMui(assignment.dueDate))
+        setManualGradingControlled(assignment.manualGrading)
     }, [assignment])
 
     return (
@@ -348,6 +371,10 @@ export const AssignmentInfo = ({  }: AssignmentInfoProps) => {
                             const newAvailableDate = new Date(e.target.value)
                             if (assignment.dueDate && newAvailableDate >= assignment.dueDate) {
                                 e.preventDefault()
+                                snackbar.open({
+                                    type: 'error',
+                                    message: `The assignment cannot open after its due date!`
+                                })
                                 return false
                             }
                             setAvailableDateControlled(e.target.value)
@@ -378,6 +405,10 @@ export const AssignmentInfo = ({  }: AssignmentInfoProps) => {
                             // Due date cannot be earlier than available date
                             if (assignment.availableDate && newDueDate <= assignment.availableDate) {
                                 e.preventDefault()
+                                snackbar.open({
+                                    type: 'error',
+                                    message: `The assignment cannot close before its open date!`
+                                })
                                 return
                             }
                             setDueDateControlled(e.target.value)
@@ -403,7 +434,7 @@ export const AssignmentInfo = ({  }: AssignmentInfoProps) => {
                 </h5>
                 <div>
                     <Checkbox
-                        defaultChecked={ assignment.manualGrading }
+                        checked={ manualGradingControlled }
                         onChange={ (e: ChangeEvent<HTMLInputElement>) => {
                             onManualGradingChanged(e)
                         } }

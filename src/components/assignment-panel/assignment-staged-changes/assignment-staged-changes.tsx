@@ -127,7 +127,7 @@ export const RestoreFileButton = ({ stagedChange }: RestoreFileButtonProps) => {
 }
 
 export const AssignmentStagedChanges = ({ ...props }: AssignmentStagedChangesProps) => {
-    const { assignment, jobStatusMap } = useAssignment()!
+    const { assignment } = useAssignment()!
     const commands = useCommands()
     const [showMore, setShowMore] = useState<boolean>(false)
 
@@ -191,7 +191,6 @@ export const AssignmentStagedChanges = ({ ...props }: AssignmentStagedChangesPro
                     No Changes
                     { ignoredFilesInfoPopover }
                 </h3>
-                <pre>{ JSON.stringify(jobStatusMap) }</pre>
                 <p style={{ fontSize: 13, margin: 0 }}>
                     Files you&apos;ve changed since your last submission will appear here.
                     Anything listed under your&nbsp;

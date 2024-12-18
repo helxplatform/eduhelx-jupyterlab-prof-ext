@@ -76,7 +76,8 @@ export class WebsocketCrudMessage extends IncomingWebsocketMessage<CrudPayload> 
 
 interface IWebsocketJobStatusMessage extends IIncomingWebsocketMessage<JobStatusPayload> {
     jobId: string
-    jobType: string | null
+    // May be undefined for PENDING statuses
+    jobType?: string | null
     jobStatus: JobStatusEnum
 }
 

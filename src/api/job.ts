@@ -4,6 +4,8 @@ import { JobStatusResponse, JobResultResponse, JobStatusEnum } from './api-respo
 export interface IJobStatus {
     readonly id: string
     readonly status: JobStatusEnum
+    readonly type?: string | null
+    readonly isComplete: boolean
 }
 
 export interface IJobResult extends IJobStatus {
@@ -24,6 +26,13 @@ export class JobStatus implements IJobStatus {
     ) {}
     get id() { return this._id }
     get status() { return this._status }
+    get isComplete() {
+        return (
+            this.status === JobStatusEnum.SUCCESS ||
+            this.status === JobStatusEnum.FAILURE ||
+            this.status === JobStatusEnum.REVOKED
+        )
+    }
 
     static fromResponse(data: JobStatusResponse): IJobStatus {
         return new JobStatus(
