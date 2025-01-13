@@ -22,7 +22,7 @@ interface AssignmentInfoProps {
 
 const formatDateToMui = (date: Date | null | undefined): string => {
     if (date === null || date === undefined) return ""
-    return moment(date).format("YYYY-MM-DDTHH:mm")
+    return moment(date).utcOffset(-new Date().getTimezoneOffset()).format("YYYY-MM-DDTHH:mm")
 }
 
 const formatMuiToDate = (date: string): Date | null => {
@@ -182,7 +182,7 @@ export const AssignmentInfo = ({  }: AssignmentInfoProps) => {
                 })
             }
         }()
-    }, 1000, { leading: true })
+    }, 1000, { leading: false })
 
     const onDueDateChanged = useDebouncedCallback((e: ChangeEvent<HTMLInputElement>) => {
         void async function() {
@@ -199,7 +199,7 @@ export const AssignmentInfo = ({  }: AssignmentInfoProps) => {
                 })
             }
         }()
-    }, 1000, { leading: true })
+    }, 1000, { leading: false })
 
     const onManualGradingChanged = useDebouncedCallback((e: ChangeEvent<HTMLInputElement>) => {
         const manualGrading = e.target.checked
