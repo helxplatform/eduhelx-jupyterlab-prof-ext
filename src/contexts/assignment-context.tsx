@@ -219,7 +219,6 @@ export const AssignmentProvider = ({ fileBrowser, children }: IAssignmentProvide
 
         void async function() {
             if (lastWsMessage instanceof WebsocketCrudMessage) {
-                // TODO
                 switch (lastWsMessage.resourceType) {
                     case CrudResourceType.COURSE:
                     case CrudResourceType.USER:
