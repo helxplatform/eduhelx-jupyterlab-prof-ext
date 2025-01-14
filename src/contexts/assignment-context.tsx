@@ -132,29 +132,29 @@ export const AssignmentProvider = ({ fileBrowser, children }: IAssignmentProvide
         // Current path being undefined is a precursor to loading.
         // We cannot begin to load assignment data until current path is loaded.
         if (!currentPath) return
-
+        
+        let timeoutId: number
         const timeout = async () => {
             try {
                 await updateAssignments()
-                window.setTimeout(timeout, POLL_DELAY)
+                timeoutId = window.setTimeout(timeout, POLL_DELAY)
             } catch (e: any) {
                 // Stop polling if an abort error is encountered.
                 if (e.name === "AbortError") return
                 else {
                     console.warn(`Encountered unexpected error while pulling assignment data for path ${ currentPath }`, e)
                     // Expedite the next poll if an unexpected error is encountered.
-                    window.setTimeout(timeout, POLL_RETRY_DELAY)
+                    timeoutId = window.setTimeout(timeout, POLL_RETRY_DELAY)
                 }
             }
         }
         timeout()
 
         return () => {
-            // We could also store the timeout ID and cancel the timeout directly here.
-            // But the controller itself is sufficient for supporting this logic.
+            window.clearTimeout(timeoutId)
             assignmentsController.current?.abort()
         }
-    }, [currentPath])
+    }, [currentPath, updateAssignments])
 
     /** Supplemental polling of course and user data. */
     useEffect(() => {
@@ -163,26 +163,29 @@ export const AssignmentProvider = ({ fileBrowser, children }: IAssignmentProvide
         setCourse(undefined)
         setInstructor(undefined)
         setStudents(undefined)
+
+        let timeoutId: number
         const timeout = async () => {
             try {
                 await updateCourseAndUserData()
-                window.setTimeout(timeout, POLL_DELAY)
+                timeoutId = window.setTimeout(timeout, POLL_DELAY)
             } catch (e: any) {
                 // Stop polling if an abort error is encountered.
                 if (e.name === "AbortError") return
                 else {
                     console.warn(`Encountered unexpected error while pulling course/user data`, e)
                     // Expedite the next poll if an unexpected error is encountered.
-                    window.setTimeout(timeout, POLL_RETRY_DELAY)
+                    timeoutId = window.setTimeout(timeout, POLL_RETRY_DELAY)
                 }
             }
         }
         timeout()
 
         return () => {
+            window.clearTimeout(timeoutId)
             courseUserController.current?.abort()
         }
-    }, [])
+    }, [updateCourseAndUserData])
 
     /** Poll notebook files.
      * At the moment, this isn't integrated into websockets (not beneficial enough to warranting FS monitoring)
@@ -190,26 +193,28 @@ export const AssignmentProvider = ({ fileBrowser, children }: IAssignmentProvide
     useEffect(() => {
         setNotebookFiles(undefined)
 
+        let timeoutId: number
         const timeout = async () => {
             try {
                 await updateNotebookFiles()
-                window.setTimeout(timeout, POLL_NOTEBOOK_FILES_DELAY)
+                timeoutId = window.setTimeout(timeout, POLL_NOTEBOOK_FILES_DELAY)
             } catch (e: any) {
                 // Stop polling if an abort error is encountered.
                 if (e.name === "AbortError") return
                 else {
                     console.warn(`Encountered unexpected error while pulling notebook files`, e)
                     // Expedite the next poll if an unexpected error is encountered.
-                    window.setTimeout(timeout, POLL_RETRY_DELAY)
+                    timeoutId = window.setTimeout(timeout, POLL_RETRY_DELAY)
                 }
             }
         }
         timeout()
 
         return () => {
+            window.clearTimeout(timeoutId)
             notebookFileController.current?.abort()
         }
-    }, [])
+    }, [updateNotebookFiles])
 
     /**
      * Handle incoming WS messages and update state accordingly.
@@ -244,7 +249,7 @@ export const AssignmentProvider = ({ fileBrowser, children }: IAssignmentProvide
                 })
             }
         }()
-    }, [lastWsMessage])
+    }, [lastWsMessage, updateAssignments, updateCourseAndUserData])
 
     return (
         <AssignmentContext.Provider value={{
