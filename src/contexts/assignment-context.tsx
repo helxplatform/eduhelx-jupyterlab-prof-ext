@@ -109,6 +109,35 @@ export const AssignmentProvider = ({ fileBrowser, children }: IAssignmentProvide
         setInstructor(data.instructor)
         setStudents(data.students)
     }, [])
+
+    const poll = useCallback((
+        pollFn: () => Promise<void>, 
+        {
+            pollDelay=POLL_DELAY,
+            pollRetryDelay=POLL_RETRY_DELAY,
+            onFailure=(e: any) => {}
+        }
+    ) => {
+        let timeoutId: number
+        const timeout = async () => {
+            try {
+                await pollFn()
+                timeoutId = window.setTimeout(timeout, pollDelay)
+            } catch (e: any) {
+                // Stop polling if an abort error is encountered.
+                if (e.name === "AbortError") return
+                else {
+                    await onFailure(e)
+                    // Expedite the next poll if an unexpected error is encountered.
+                    timeoutId = window.setTimeout(timeout, pollRetryDelay)
+                }
+            }
+        }
+        timeout()
+        return function cancel() {
+            window.clearTimeout(timeoutId)
+        }
+    }, [])
     
     /** Track the current working directory of the user (relative to the server CWD). */
     useEffect(() => {
@@ -133,25 +162,12 @@ export const AssignmentProvider = ({ fileBrowser, children }: IAssignmentProvide
         // We cannot begin to load assignment data until current path is loaded.
         if (!currentPath) return
         
-        let timeoutId: number
-        const timeout = async () => {
-            try {
-                await updateAssignments()
-                timeoutId = window.setTimeout(timeout, POLL_DELAY)
-            } catch (e: any) {
-                // Stop polling if an abort error is encountered.
-                if (e.name === "AbortError") return
-                else {
-                    console.warn(`Encountered unexpected error while pulling assignment data for path ${ currentPath }`, e)
-                    // Expedite the next poll if an unexpected error is encountered.
-                    timeoutId = window.setTimeout(timeout, POLL_RETRY_DELAY)
-                }
-            }
-        }
-        timeout()
+        const cancelPoll = poll(updateAssignments, {
+            onFailure: (e) => console.warn(`Encountered unexpected error while pulling assignment data for path ${ currentPath }`, e)
+        })
 
         return () => {
-            window.clearTimeout(timeoutId)
+            cancelPoll()
             assignmentsController.current?.abort()
         }
     }, [currentPath, updateAssignments])
@@ -164,25 +180,12 @@ export const AssignmentProvider = ({ fileBrowser, children }: IAssignmentProvide
         setInstructor(undefined)
         setStudents(undefined)
 
-        let timeoutId: number
-        const timeout = async () => {
-            try {
-                await updateCourseAndUserData()
-                timeoutId = window.setTimeout(timeout, POLL_DELAY)
-            } catch (e: any) {
-                // Stop polling if an abort error is encountered.
-                if (e.name === "AbortError") return
-                else {
-                    console.warn(`Encountered unexpected error while pulling course/user data`, e)
-                    // Expedite the next poll if an unexpected error is encountered.
-                    timeoutId = window.setTimeout(timeout, POLL_RETRY_DELAY)
-                }
-            }
-        }
-        timeout()
+        const cancelPoll = poll(updateCourseAndUserData, {
+            onFailure: (e) => console.warn(`Encountered unexpected error while pulling course/user data`, e)
+        })
 
         return () => {
-            window.clearTimeout(timeoutId)
+            cancelPoll()
             courseUserController.current?.abort()
         }
     }, [updateCourseAndUserData])
@@ -193,25 +196,13 @@ export const AssignmentProvider = ({ fileBrowser, children }: IAssignmentProvide
     useEffect(() => {
         setNotebookFiles(undefined)
 
-        let timeoutId: number
-        const timeout = async () => {
-            try {
-                await updateNotebookFiles()
-                timeoutId = window.setTimeout(timeout, POLL_NOTEBOOK_FILES_DELAY)
-            } catch (e: any) {
-                // Stop polling if an abort error is encountered.
-                if (e.name === "AbortError") return
-                else {
-                    console.warn(`Encountered unexpected error while pulling notebook files`, e)
-                    // Expedite the next poll if an unexpected error is encountered.
-                    timeoutId = window.setTimeout(timeout, POLL_RETRY_DELAY)
-                }
-            }
-        }
-        timeout()
+        const cancelPoll = poll(updateNotebookFiles, {
+            pollDelay: POLL_NOTEBOOK_FILES_DELAY,
+            onFailure: (e) => console.warn(`Encountered unexpected error while pulling notebook files`, e)
+        })
 
         return () => {
-            window.clearTimeout(timeoutId)
+            cancelPoll()
             notebookFileController.current?.abort()
         }
     }, [updateNotebookFiles])
