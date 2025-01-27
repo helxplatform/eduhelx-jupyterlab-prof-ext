@@ -13,21 +13,22 @@ import { gradeAssignment, IStudent, ISubmission } from '../../../api'
 import { AssignmentStatus } from '../../../api/api-responses'
 
 interface SubmissionLegendProps {
-    graded: IStudent[]
-    submitted: IStudent[]
-    unsubmitted: IStudent[]
+    graded: string[]
+    submitted: string[]
+    unsubmitted: string[]
     
     // Subset of graded in which the student has been given a grade for an old submission
     // but has since resubmitted (stale grade).
     // This is independent of graded/submitted/unsubmitted
-    resubmitted: IStudent[]
+    resubmitted: string[]
 }
 
 interface AssignmentSubmissionInfoProps {
 
 }
 
-const Circle = ({ size=8, color, style, ...props }: { size?: number, color: string } & React.HTMLProps<HTMLDivElement>) => {
+// eslint-disable-next-line
+const Circle = ({ size=8, color, style={}, ...props }: { size?: number, color: string } & React.HTMLProps<HTMLDivElement>) => {
     return (
         <div style={{
             width: size,
@@ -39,7 +40,8 @@ const Circle = ({ size=8, color, style, ...props }: { size?: number, color: stri
     )
 }
 
-const LegendItem = ({ label, value, color, style, ...props }: { label: React.ReactNode, value: React.ReactNode, color: string } & React.HTMLProps<HTMLDivElement>) => {
+// eslint-disable-next-line
+const LegendItem = ({ label, value, color, style={}, ...props }: { label: React.ReactNode, value: React.ReactNode, color: string } & React.HTMLProps<HTMLDivElement>) => {
     return (
         <div style={{ display: "flex", alignItems: "center", ...style }} { ...props }>
             <Circle color={ color } style={{ marginRight: 4 }} />
@@ -51,8 +53,7 @@ const LegendItem = ({ label, value, color, style, ...props }: { label: React.Rea
 
 const SubmissionLegend = ({ graded, submitted, unsubmitted, resubmitted }: SubmissionLegendProps) => {
     const gradedTitle = useMemo<string>(() => {
-        const resubmittedOnyens = new Set(resubmitted.map((s) => s.onyen))
-        return graded.map((s) => `${ s.onyen }${ resubmittedOnyens.has(s.onyen) ? " (stale)" : "" }`).join(", ")
+        return graded.map((onyen) => `${ onyen }${ resubmitted.includes(onyen) ? " (stale)" : "" }`).join(", ")
     }, [graded, resubmitted])
     
     return (
@@ -61,10 +62,10 @@ const SubmissionLegend = ({ graded, submitted, unsubmitted, resubmitted }: Submi
                 <Tooltip title={ gradedTitle }>
                     <LegendItem label="Graded" value={ `${ graded.length }${ resubmitted.length > 0 ? "*" : ""}` } color="var(--md-green-500)" />
                 </Tooltip>
-                <Tooltip title={ submitted.map((s) => s.onyen).join(", ") }>
+                <Tooltip title={ submitted.join(", ") }>
                     <LegendItem label="Submitted" value={ submitted.length } color="var(--md-yellow-500)" />
                 </Tooltip>
-                <Tooltip title={ unsubmitted.map((s) => s.onyen).join(", ") }>
+                <Tooltip title={ unsubmitted.join(", ") }>
                     <LegendItem label="Unsubmitted" value={ unsubmitted.length } color="var(--md-red-500)" />
                 </Tooltip>
             </div>
@@ -85,31 +86,30 @@ export const AssignmentSubmissionInfo = ({ }: AssignmentSubmissionInfoProps) => 
 
     const [graded, submitted, unsubmitted, resubmitted, total] = useMemo(() => {
         if (!assignment || !students) return [[], [], [], [], 0]
-        let graded: IStudent[] = []
-        let submitted: IStudent[] = []
-        let unsubmitted: IStudent[] = []
-        let resubmitted: IStudent[] = []
+        const graded: string[] = []
+        const submitted: string[] = []
+        const unsubmitted: string[] = []
+        const resubmitted: string[] = []
 
         Object.keys(assignment.studentSubmissions).forEach((onyen) => {
             const submissions = assignment.studentSubmissions[onyen]
 
-            const student = students.find((s) => s.onyen === onyen)!
             // If they student has no submissions, they are unsubmitted.
-            if (submissions.length === 0) unsubmitted.push(student)
+            if (submissions.length === 0) unsubmitted.push(onyen)
             else {
                 const activeSubmission = submissions.find((s) => s.active)!
                 const hasGradedSubmission = submissions.some((s) => s.graded)
 
                 // The student's active submission is graded.
-                if (activeSubmission.graded) graded.push(student)
+                if (activeSubmission.graded) graded.push(onyen)
                 else {
                     // The student has submitted but their active submission is not graded. Possibly none are graded.
                     if (hasGradedSubmission) {
                         // The student already has a graded submission but it isn't their active submission
-                        graded.push(student)
-                        resubmitted.push(student)
+                        graded.push(onyen)
+                        resubmitted.push(onyen)
                     } else {
-                        submitted.push(student)
+                        submitted.push(onyen)
                     }
                 }
             }

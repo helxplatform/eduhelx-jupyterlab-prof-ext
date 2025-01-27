@@ -10,6 +10,8 @@ import {
 import { AssignmentContent } from './assignment-content'
 import { useAssignment, useCommands, useSettings, useSnackbar } from '../../contexts'
 import { syncToLMS } from '../../api'
+import { IJobStatus } from '../../api/job'
+import { JobStatusEnum } from '../../api/api-responses'
 
 interface IAssignmentPanelProps {
 }
@@ -18,9 +20,14 @@ export const AssignmentPanel = ({}: IAssignmentPanelProps) => {
     const commands = useCommands()!
     const snackbar = useSnackbar()!
     const { repoRoot, documentationUrl } = useSettings()!
-    const { course, students, assignment, triggerImmediateUpdate } = useAssignment()!
+    const { course, students, assignment, jobStatuses } = useAssignment()!
     
-    const [syncLoading, setSyncLoading] = useState<boolean>(false)
+    const [syncJob, setSyncJob] = useState<IJobStatus|null>(null)
+
+    const syncLoading = useMemo(() => {
+        if (!syncJob) return false
+        return !syncJob.isComplete
+    }, [syncJob])
 
     const headerName = useMemo<ReactNode>(() => {
         const headerFragments = []
@@ -35,22 +42,16 @@ export const AssignmentPanel = ({}: IAssignmentPanelProps) => {
     }, [course])
 
     const doSync = useCallback(async () => {
-        setSyncLoading(true)
         try {
-            await syncToLMS()
-            await triggerImmediateUpdate()
-            snackbar.open({
-                type: 'success',
-                message: 'Successfully synced with LMS'
-            })
+            const job = await syncToLMS()
+            setSyncJob(job)
         } catch (e: any) {
             snackbar.open({
                 type: 'error',
                 message: 'Failed to sync with LMS!'
             })
         }
-        setSyncLoading(false)
-    }, [triggerImmediateUpdate, snackbar])
+    }, [snackbar])
 
     const openDocumentation = useCallback(() => {
         if (!documentationUrl) return
@@ -66,6 +67,28 @@ export const AssignmentPanel = ({}: IAssignmentPanelProps) => {
             dontShowBrowser: true
         })
     }, [repoRoot])
+
+    useEffect(() => {
+        if (syncJob === null) return
+
+        let newestSyncUpdate
+        // Iterate from newest to oldest statuses
+        for (let i=jobStatuses.length-1; i>=0; i--) {
+            const jobStatus = jobStatuses[i]
+            if (jobStatus.id === syncJob.id) {
+                newestSyncUpdate = jobStatus
+                break
+            }
+        }
+        if (newestSyncUpdate && newestSyncUpdate.status !== syncJob.status) {
+            // Update the status of the current sync job.
+            if (newestSyncUpdate.isComplete) snackbar.open({
+                type: 'success',
+                message: 'Successfully synced with LMS'
+            })
+            setSyncJob(newestSyncUpdate)
+        }
+    }, [syncJob, jobStatuses])
     
     return (
         <div className={ panelWrapperClass }>

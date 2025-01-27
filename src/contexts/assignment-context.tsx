@@ -1,25 +1,37 @@
-import React, { createContext, useContext, ReactNode, useState, useMemo, useEffect, useCallback } from 'react'
+import React, { createContext, useContext, ReactNode, useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import { IChangedArgs } from '@jupyterlab/coreutils'
 import { FileBrowserModel, IDefaultFileBrowser } from '@jupyterlab/filebrowser'
 import { useSnackbar } from './snackbar-context'
-import { IEduhelxSubmissionModel } from '../tokens'
-import { IAssignment, IInstructor, ICurrentAssignment, ICourse, getAssignments, GetAssignmentsResponse, GetInstructorAndStudentsAndCourseResponse, IStudent, getInstructorAndStudentsAndCourse, listNotebookFiles } from '../api'
+import {
+    IAssignment, IInstructor, ICurrentAssignment, ICourse, IStudent,
+    getAssignments, getInstructorAndStudentsAndCourse, listNotebookFiles,
+    WebsocketCrudMessage,
+    WebsocketJobStatusMessage,
+    IIncomingWebsocketMessage
+} from '../api'
+import { CrudResourceType } from '../api/ws-responses'
+import { IJobStatus, JobStatus } from '../api/job'
+import { JobStatusEnum } from '../api/api-responses'
+import { useWebsocket } from './websocket-context'
 
 interface GradedNotebookExists {
     (assignment: IAssignment, directoryPath?: string | undefined): boolean
 }
 
 interface IAssignmentContext {
+    loading: boolean
+    path: string | null
     assignments: IAssignment[] | null | undefined
     assignment: ICurrentAssignment | null | undefined
     instructor: IInstructor | undefined
     students: IStudent[] | undefined
     course: ICourse | undefined
     notebookFiles: { [assignmentId: string]: string[] } | undefined
-    path: string | null
-    loading: boolean
+    jobStatuses: IJobStatus[]
     gradedNotebookExists: GradedNotebookExists
-    triggerImmediateUpdate: () => Promise<void>
+    updateNotebookFiles: (requestOptions?: RequestInit) => Promise<void>
+    updateAssignments: (requestOptions?: RequestInit) => Promise<void>
+    updateCourseAndUserData: (requestOptions?: RequestInit) => Promise<void>
 }
 
 interface IAssignmentProviderProps {
@@ -27,13 +39,22 @@ interface IAssignmentProviderProps {
     children?: ReactNode
 }
 
-const POLL_DELAY = 15000
-const POLL_RETRY_DELAY = 1000
+/**
+ * Supplemental polling is utilized in addition to websockets
+ * to mitigate any downtime/missed messaging.
+ */
+const POLL_DELAY = 30000
+const POLL_RETRY_DELAY = 2500
+// It would be a lot more effort than its worth to observe filesystem changes on the server extension
+// just in order to track which notebook files are in the user's repository directory. It's much
+// easier to just short poll it, since it doesn't involve any API calls (just a basic directory scan).
+const POLL_NOTEBOOK_FILES_DELAY = 2500
 
 export const AssignmentContext = createContext<IAssignmentContext|undefined>(undefined)
 
 export const AssignmentProvider = ({ fileBrowser, children }: IAssignmentProviderProps) => {
     const snackbar = useSnackbar()!
+    const { lastWsMessage } = useWebsocket()!
     const [currentPath, setCurrentPath] = useState<string|null>(null)
     const [currentAssignment, setCurrentAssignment] = useState<ICurrentAssignment|null|undefined>(undefined)
     const [assignments, setAssignments] = useState<IAssignment[]|null|undefined>(undefined)
@@ -41,6 +62,13 @@ export const AssignmentProvider = ({ fileBrowser, children }: IAssignmentProvide
     const [students, setStudents] = useState<IStudent[]|undefined>(undefined)
     const [course, setCourse] = useState<ICourse|undefined>(undefined)
     const [notebookFiles, setNotebookFiles] = useState<{ [key: string]: string[] }|undefined>(undefined)
+    const [jobStatuses, setJobStatuses] = useState<IJobStatus[]>([])
+
+    const notebookFileController = useRef<AbortController>()
+    const assignmentsController = useRef<AbortController>()
+    const courseUserController = useRef<AbortController>()
+    
+    const lastProcessedWsMessage = useRef<IIncomingWebsocketMessage<any>>()
 
     const loading = useMemo(() => (
         currentAssignment === undefined ||
@@ -57,27 +85,64 @@ export const AssignmentProvider = ({ fileBrowser, children }: IAssignmentProvide
         return notebookFiles[assignment.id].some((file) => file === gradedNotebookPath)
     }, [notebookFiles])
 
-    const triggerImmediateUpdate = useCallback(async () => {
-        if (!currentPath) return
-        try {
-            const [
-                assignmentData,
-                courseUserData,
-                { notebooks }
-            ] = await Promise.all([
-                getAssignments(currentPath),
-                getInstructorAndStudentsAndCourse(),
-                listNotebookFiles()
-            ])
-            setAssignments(assignmentData.assignments)
-            setCurrentAssignment(assignmentData.currentAssignment)
-            setCourse(courseUserData.course)
-            setInstructor(courseUserData.instructor)
-            setStudents(courseUserData.students)
-            setNotebookFiles(notebooks)
-        } catch {}
+    // Pull all notebook files (currently, *.ipynb) in the repository.
+    const updateNotebookFiles = useCallback(async () => {
+        notebookFileController.current?.abort()
+        notebookFileController.current = new AbortController()
+        const { notebooks } = await listNotebookFiles({ signal: notebookFileController.current.signal })
+        setNotebookFiles(notebooks)
+    }, [])
+
+    // Pull assignments and current assignment (of the cwd, when applicable)
+    const updateAssignments = useCallback(async () => {
+        if (currentPath === null) return
+        assignmentsController.current?.abort()
+        assignmentsController.current = new AbortController()
+        const data = await getAssignments(currentPath, { signal: assignmentsController.current.signal })
+        setAssignments(data.assignments)
+        setCurrentAssignment(data.currentAssignment)
     }, [currentPath])
+
+    // Pull course, current user, and students
+    const updateCourseAndUserData = useCallback(async () => {
+        courseUserController.current?.abort()
+        courseUserController.current = new AbortController()
+        const data = await getInstructorAndStudentsAndCourse({ signal: courseUserController.current.signal })
+        setCourse(data.course)
+        setInstructor(data.instructor)
+        setStudents(data.students)
+    }, [])
+
+    const poll = useCallback((
+        pollFn: () => Promise<void>, 
+        {
+            pollDelay=POLL_DELAY,
+            pollRetryDelay=POLL_RETRY_DELAY,
+            onFailure=(e: any) => {}
+        }
+    ) => {
+        let timeoutId: number
+        const timeout = async () => {
+            try {
+                await pollFn()
+                timeoutId = window.setTimeout(timeout, pollDelay)
+            } catch (e: any) {
+                // Stop polling if an abort error is encountered.
+                if (e.name === "AbortError") return
+                else {
+                    await onFailure(e)
+                    // Expedite the next poll if an unexpected error is encountered.
+                    timeoutId = window.setTimeout(timeout, pollRetryDelay)
+                }
+            }
+        }
+        timeout()
+        return function cancel() {
+            window.clearTimeout(timeoutId)
+        }
+    }, [])
     
+    /** Track the current working directory of the user (relative to the server CWD). */
     useEffect(() => {
         setCurrentPath(fileBrowser.model.path)
 
@@ -90,103 +155,96 @@ export const AssignmentProvider = ({ fileBrowser, children }: IAssignmentProvide
         }
     }, [fileBrowser])
 
+    /** Supplemental polling of assignment data. */
     useEffect(() => {
+        // If the currentPath changes, we need to immediately return to a loading state.
         setAssignments(undefined)
         setCurrentAssignment(undefined)
+
+        // Current path being undefined is a precursor to loading.
+        // We cannot begin to load assignment data until current path is loaded.
+        if (!currentPath) return
         
-        let cancelled = false
-        let timeoutId: number | undefined = undefined
-        async function timeout() {
-            if (currentPath !== null) {
-                try {
-                    const data = await getAssignments(currentPath)
-                    if (!cancelled) {
-                        setAssignments(data.assignments)
-                        setCurrentAssignment(data.currentAssignment)
-                        timeoutId = window.setTimeout(timeout, POLL_DELAY)
-                    }
-                } catch (e: any) {
-                    // If the request fails, just maintain whatever state we already have
-                    console.error(e)
-                    snackbar.open({
-                        type: 'warning',
-                        message: 'Failed to pull assignments...'
-                    })
-                    if (!cancelled) timeoutId = window.setTimeout(timeout, POLL_RETRY_DELAY)
-                }
-            }
-        }
-        timeout()
+        const cancelPoll = poll(updateAssignments, {
+            onFailure: (e) => console.warn(`Encountered unexpected error while pulling assignment data for path ${ currentPath }`, e)
+        })
+
         return () => {
-            cancelled = true
-            window.clearTimeout(timeoutId)
+            cancelPoll()
+            assignmentsController.current?.abort()
         }
+    }, [currentPath, updateAssignments, poll])
 
-    }, [currentPath])
-
+    /** Supplemental polling of course and user data. */
     useEffect(() => {
+        // Since this effect only runs on mount, returning to loading state is not necessary (we start in loading state).
+        // Included in case this ever changes to have dependencies. Right now, these setStates are effectively no-ops.
         setCourse(undefined)
         setInstructor(undefined)
         setStudents(undefined)
 
-        let cancelled = false
-        let timeoutId: number | undefined = undefined
-        async function timeout() {
-            try {
-                const data = await getInstructorAndStudentsAndCourse()
-                if (!cancelled) {
-                    setCourse(data.course)
-                    setInstructor(data.instructor)
-                    setStudents(data.students)
-                    timeoutId = window.setTimeout(timeout, POLL_DELAY)
-                }
-            } catch (e: any) {
-                // If the request fails, just maintain whatever state we already have
-                console.error(e)
-                snackbar.open({
-                    type: 'warning',
-                    message: 'Failed to pull course data...'
-                })
-                if (!cancelled) timeoutId = window.setTimeout(timeout, POLL_RETRY_DELAY)
-            }
-        }
-        timeout()
-        return () => {
-            cancelled = true
-            window.clearTimeout(timeoutId)
-        }
-    }, [])
+        const cancelPoll = poll(updateCourseAndUserData, {
+            onFailure: (e) => console.warn(`Encountered unexpected error while pulling course/user data`, e)
+        })
 
+        return () => {
+            cancelPoll()
+            courseUserController.current?.abort()
+        }
+    }, [updateCourseAndUserData, poll])
+
+    /** Poll notebook files.
+     * At the moment, this isn't integrated into websockets (not beneficial enough to warranting FS monitoring)
+     * so polling is done quite frequently. The endpoint only requires a filesystem scan against the repo, so lightweight. */
     useEffect(() => {
         setNotebookFiles(undefined)
 
-        let cancelled = false
-        let timeoutId: number | undefined = undefined
-        async function timeout() {
-            try {
-                const { notebooks } = await listNotebookFiles()
-                if (!cancelled) {
-                    setNotebookFiles(notebooks)
-                    // We don't use POLL_DELAY for fetching notebook files, since this needs to be reflected more rapidly
-                    // to the user and also doesn't involve any API calls, only scanning the directory for ipynb files.
-                    timeoutId = window.setTimeout(timeout, 2500)
-                }
-            } catch (e: any) {
-                // If the request fails, just maintain whatever state we already have
-                console.error(e)
-                snackbar.open({
-                    type: 'warning',
-                    message: 'Failed to pull notebook files for assignments...'
-                })
-                if (!cancelled) timeoutId = window.setTimeout(timeout, POLL_RETRY_DELAY)
-            }
-        }
-        timeout()
+        const cancelPoll = poll(updateNotebookFiles, {
+            pollDelay: POLL_NOTEBOOK_FILES_DELAY,
+            onFailure: (e) => console.warn(`Encountered unexpected error while pulling notebook files`, e)
+        })
+
         return () => {
-            cancelled = true
-            window.clearTimeout(timeoutId)
+            cancelPoll()
+            notebookFileController.current?.abort()
         }
-    }, [])
+    }, [updateNotebookFiles, poll])
+
+    /**
+     * Handle incoming WS messages and update state accordingly.
+     */
+    useEffect(() => {
+        if (!lastWsMessage || lastWsMessage === lastProcessedWsMessage.current) return
+
+        lastProcessedWsMessage.current = lastWsMessage
+        void async function() {
+            if (lastWsMessage instanceof WebsocketCrudMessage) {
+                switch (lastWsMessage.resourceType) {
+                    case CrudResourceType.COURSE:
+                    case CrudResourceType.USER:
+                        await updateCourseAndUserData()
+                        break;
+                    case CrudResourceType.SUBMISSION:
+                    case CrudResourceType.ASSIGNMENT:
+                        await updateAssignments()
+                        break;
+                    default:
+                        console.log("Unrecognized CRUD resource type", lastWsMessage.resourceType)
+                        break;
+                }
+            } else if (lastWsMessage instanceof WebsocketJobStatusMessage) {
+                const newJobStatus = JobStatus.fromResponse(lastWsMessage.payload)
+                setJobStatuses((jobStatuses) => {
+                    const newStatuses = jobStatuses.map((jobStatus) => {
+                        if (jobStatus.id === lastWsMessage.jobId) return newJobStatus
+                        else return jobStatus
+                    })
+                    if (!newStatuses.map((s) => s.id).includes(lastWsMessage.jobId)) newStatuses.push(newJobStatus)
+                    return newStatuses
+                })
+            }
+        }()
+    }, [lastWsMessage, updateAssignments, updateCourseAndUserData])
 
     return (
         <AssignmentContext.Provider value={{
@@ -198,8 +256,11 @@ export const AssignmentProvider = ({ fileBrowser, children }: IAssignmentProvide
             notebookFiles,
             path: currentPath,
             loading,
+            jobStatuses,
             gradedNotebookExists,
-            triggerImmediateUpdate
+            updateNotebookFiles,
+            updateAssignments,
+            updateCourseAndUserData
         }}>
             { children }
         </AssignmentContext.Provider>

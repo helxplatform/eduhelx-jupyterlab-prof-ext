@@ -18,7 +18,7 @@ interface AssignmentSubmitFormProps {
 }
 
 export const AssignmentSubmitForm = ({ }: AssignmentSubmitFormProps) => {
-    const { assignment, course, path, gradedNotebookExists } = useAssignment()!
+    const { assignment, course, path, gradedNotebookExists, updateAssignments } = useAssignment()!
     const backdrop = useBackdrop()!
     const snackbar = useSnackbar()!
 
@@ -96,6 +96,10 @@ export const AssignmentSubmitForm = ({ }: AssignmentSubmitFormProps) => {
                 message: 'Failed to upload changes!'
             })
         }
+        try {
+            // In order to immediately update staged changes tacked onto `current_assignment`.
+            await updateAssignments()
+        } catch (e: any) {}
         setSubmitting(false)
     }
     

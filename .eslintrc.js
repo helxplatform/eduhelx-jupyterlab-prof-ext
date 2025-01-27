@@ -8,6 +8,7 @@ module.exports = {
   parser: '@typescript-eslint/parser',
   parserOptions: {
     project: 'tsconfig.test.json',
+    tsconfigRootDir: __dirname,
     sourceType: 'module'
   },
   plugins: ['@typescript-eslint'],
@@ -18,16 +19,14 @@ module.exports = {
       'error',
       {
         selector: 'interface',
-        format: ['PascalCase'],
-        custom: {
-          regex: '^I[A-Z]',
-          match: true
-        }
+        format: ['PascalCase']
       }
     ],
+    '@typescript-eslint/no-empty-function': ['warn'],
     '@typescript-eslint/no-unused-vars': ['warn', { args: 'none' }],
     '@typescript-eslint/no-explicit-any': 'off',
     '@typescript-eslint/no-namespace': 'off',
+    '@typescript-eslint/no-inferrable-types': ['warn', { ignoreParameters: true, ignoreProperties: true }],
     '@typescript-eslint/no-this-alias': [
       'error',
       {
@@ -36,14 +35,14 @@ module.exports = {
     ],
     '@typescript-eslint/no-use-before-define': 'off',
     '@typescript-eslint/quotes': [
-      'error',
-      'single',
-      { avoidEscape: true, allowTemplateLiterals: false }
+      'off',
+      { avoidEscape: true, allowTemplateLiterals: true }
     ],
     'curly': 'off',
     'eqeqeq': 'error',
     'prefer-arrow-callback': 'error',
-    'no-empty-pattern': 'off'
+    'no-empty-pattern': 'off',
+    'no-empty': ['warn', { allowEmptyCatch: true }] 
   },
   settings: {
     react: {

@@ -75,10 +75,12 @@
     "@material-ui/lab": "^4.0.0-alpha.39",
     "antd": "^5.16.4",
     "csx": "^10.0.2",
+    "events": "^3.3.0",
     "moment": "^2.29.4",
     "qs": "^6.11.2",
     "react": "^17.0.2",
     "react-dom": "^17.0.2",
+    "react-use-websocket": "^4.10.1",
     "typestyle": "^2.4.0",
     "use-debounce": "^10.0.0",
     "uuid": "^9.0.0"
@@ -86,6 +88,7 @@
   "devDependencies": {
     "@jupyterlab/builder": "^4.0.0",
     "@jupyterlab/testutils": "^4.0.0",
+    "@types/events": "^3",
     "@types/jest": "^29.2.0",
     "@types/json-schema": "^7.0.11",
     "@types/node": "^20.4.0",
