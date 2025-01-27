@@ -6,7 +6,8 @@ import {
     IAssignment, IInstructor, ICurrentAssignment, ICourse, IStudent,
     getAssignments, getInstructorAndStudentsAndCourse, listNotebookFiles,
     WebsocketCrudMessage,
-    WebsocketJobStatusMessage
+    WebsocketJobStatusMessage,
+    IIncomingWebsocketMessage
 } from '../api'
 import { CrudResourceType } from '../api/ws-responses'
 import { IJobStatus, JobStatus } from '../api/job'
@@ -66,6 +67,8 @@ export const AssignmentProvider = ({ fileBrowser, children }: IAssignmentProvide
     const notebookFileController = useRef<AbortController>()
     const assignmentsController = useRef<AbortController>()
     const courseUserController = useRef<AbortController>()
+    
+    const lastProcessedWsMessage = useRef<IIncomingWebsocketMessage<any>>()
 
     const loading = useMemo(() => (
         currentAssignment === undefined ||
@@ -211,8 +214,9 @@ export const AssignmentProvider = ({ fileBrowser, children }: IAssignmentProvide
      * Handle incoming WS messages and update state accordingly.
      */
     useEffect(() => {
-        if (!lastWsMessage) return
+        if (!lastWsMessage || lastWsMessage === lastProcessedWsMessage.current) return
 
+        lastProcessedWsMessage.current = lastWsMessage
         void async function() {
             if (lastWsMessage instanceof WebsocketCrudMessage) {
                 switch (lastWsMessage.resourceType) {
