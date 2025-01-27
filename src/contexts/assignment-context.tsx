@@ -170,7 +170,7 @@ export const AssignmentProvider = ({ fileBrowser, children }: IAssignmentProvide
             cancelPoll()
             assignmentsController.current?.abort()
         }
-    }, [currentPath, updateAssignments])
+    }, [currentPath, updateAssignments, poll])
 
     /** Supplemental polling of course and user data. */
     useEffect(() => {
@@ -188,7 +188,7 @@ export const AssignmentProvider = ({ fileBrowser, children }: IAssignmentProvide
             cancelPoll()
             courseUserController.current?.abort()
         }
-    }, [updateCourseAndUserData])
+    }, [updateCourseAndUserData, poll])
 
     /** Poll notebook files.
      * At the moment, this isn't integrated into websockets (not beneficial enough to warranting FS monitoring)
@@ -205,7 +205,7 @@ export const AssignmentProvider = ({ fileBrowser, children }: IAssignmentProvide
             cancelPoll()
             notebookFileController.current?.abort()
         }
-    }, [updateNotebookFiles])
+    }, [updateNotebookFiles, poll])
 
     /**
      * Handle incoming WS messages and update state accordingly.
@@ -218,9 +218,9 @@ export const AssignmentProvider = ({ fileBrowser, children }: IAssignmentProvide
                 switch (lastWsMessage.resourceType) {
                     case CrudResourceType.COURSE:
                     case CrudResourceType.USER:
-                    case CrudResourceType.SUBMISSION:
                         await updateCourseAndUserData()
                         break;
+                    case CrudResourceType.SUBMISSION:
                     case CrudResourceType.ASSIGNMENT:
                         await updateAssignments()
                         break;
